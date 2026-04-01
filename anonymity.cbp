@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+﻿<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
 <CodeBlocks_project_file>
 	<FileVersion major="1" minor="6" />
 	<Project>
@@ -32,74 +32,75 @@
 			<Add library="SDL3" />
 			<Add library="opengl32" />
 		</Linker>
-		<Unit filename="auxdata.c">
+		<Unit filename="src/auxdata.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="auxdata.h" />
-		<Unit filename="buffer.c">
+		<Unit filename="src/auxdata.h" />
+		<Unit filename="src/buffer.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="buffer.h" />
-		<Unit filename="entity.c">
+		<Unit filename="src/buffer.h" />
+		<Unit filename="src/entity.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="entity.h" />
-		<Unit filename="events.c">
+		<Unit filename="src/entity.h" />
+		<Unit filename="src/events.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="events.h" />
-		<Unit filename="examples.c">
+		<Unit filename="src/events.h" />
+		<Unit filename="src/examples.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="examples.h" />
-		<Unit filename="font.c">
+		<Unit filename="src/examples.h" />
+		<Unit filename="src/font.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="font.h" />
-		<Unit filename="graphics.c">
+		<Unit filename="src/font.h" />
+		<Unit filename="src/graphics.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="graphics.h" />
-		<Unit filename="history_tree.c">
+		<Unit filename="src/graphics.h" />
+		<Unit filename="src/history_tree.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="history_tree.h" />
-		<Unit filename="main.c">
+		<Unit filename="src/history_tree.h" />
+		<Unit filename="src/main.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="main.h" />
-		<Unit filename="network.c">
+		<Unit filename="src/main.h" />
+		<Unit filename="src/network.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="network.h" />
-		<Unit filename="queue.c">
+		<Unit filename="src/network.h" />
+		<Unit filename="src/queue.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="queue.h" />
-		<Unit filename="render.c">
+		<Unit filename="src/queue.h" />
+		<Unit filename="src/render.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="render.h" />
-		<Unit filename="shader.c">
+		<Unit filename="src/render.h" />
+		<Unit filename="src/shader.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="shader.h" />
-		<Unit filename="stabilizing_algo.c">
+		<Unit filename="src/shader.h" />
+		<Unit filename="src/stabilizing_algo.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="stabilizing_algo.h" />
-		<Unit filename="terminating_algo.c">
+		<Unit filename="src/stabilizing_algo.h" />
+		<Unit filename="src/terminating_algo.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="terminating_algo.h" />
-		<Unit filename="text.c">
+		<Unit filename="src/terminating_algo.h" />
+		<Unit filename="src/text.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="text.h" />
-		<Unit filename="vector.c">
+		<Unit filename="src/text.h" />
+		<Unit filename="src/vector.c">
 			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="vector.h" />
+		<Unit filename="src/vector.h" />
 		<Extensions />
 	</Project>
 </CodeBlocks_project_file>
+

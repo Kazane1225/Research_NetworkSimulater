@@ -27,7 +27,7 @@ echo.
 
 rem --- Start Node.js server ---
 start "" "%URL%"
-node "%~dp0serve.js" %PORT%
+node "%~dp0scripts\serve.js" %PORT%
 
 popd
 endlocal
