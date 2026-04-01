@@ -1,0 +1,217 @@
+# depslib dependency file v1.0
+1742447975 source:c:\dropbox\projects\c\anonymity\auxdata.c
+	"main.h"
+
+1743063853 c:\dropbox\projects\c\anonymity\main.h
+	<stdlib.h>
+	<stdio.h>
+	<stdarg.h>
+	<math.h>
+	<SDL3/SDL.h>
+	<emscripten.h>
+	<emscripten/html5.h>
+	<GLES3/gl3.h>
+	<SDL3/SDL.h>
+	<SDL3/SDL_opengl.h>
+	"queue.h"
+	"vector.h"
+	"buffer.h"
+	"shader.h"
+	"font.h"
+	"text.h"
+	"graphics.h"
+	"history_tree.h"
+	"entity.h"
+	"examples.h"
+	"network.h"
+	"auxdata.h"
+	"stabilizing_algo.h"
+	"terminating_algo.h"
+	"render.h"
+	"events.h"
+
+1652057608 c:\dropbox\projects\c\anonymity\queue.h
+
+1651669609 c:\dropbox\projects\c\anonymity\vector.h
+
+1742432372 c:\dropbox\projects\c\anonymity\graphics.h
+
+1742437357 c:\dropbox\projects\c\anonymity\history_tree.h
+
+1742437797 c:\dropbox\projects\c\anonymity\entity.h
+
+1652429002 c:\dropbox\projects\c\anonymity\examples.h
+
+1742623103 c:\dropbox\projects\c\anonymity\network.h
+
+1742429622 c:\dropbox\projects\c\anonymity\auxdata.h
+
+1651893291 c:\dropbox\projects\c\anonymity\stabilizing_algo.h
+
+1702131525 c:\dropbox\projects\c\anonymity\terminating_algo.h
+
+1742342992 c:\dropbox\projects\c\anonymity\render.h
+
+1742922341 c:\dropbox\projects\c\anonymity\events.h
+
+1742438123 source:c:\dropbox\projects\c\anonymity\entity.c
+	"main.h"
+
+1767589186 source:c:\dropbox\projects\c\anonymity\events.c
+	"main.h"
+
+1742401845 source:c:\dropbox\projects\c\anonymity\examples.c
+	"main.h"
+
+1742473845 source:c:\dropbox\projects\c\anonymity\graphics.c
+	"main.h"
+
+1742437885 source:c:\dropbox\projects\c\anonymity\history_tree.c
+	"main.h"
+
+1766382562 source:c:\dropbox\projects\c\anonymity\network.c
+	"main.h"
+
+1652057608 source:c:\dropbox\projects\c\anonymity\queue.c
+	"main.h"
+
+1767589437 source:c:\dropbox\projects\c\anonymity\render.c
+	"main.h"
+
+1769846979 source:c:\dropbox\projects\c\anonymity\stabilizing_algo.c
+	"main.h"
+
+1702165239 source:c:\dropbox\projects\c\anonymity\terminating_algo.c
+	"main.h"
+
+1651669609 source:c:\dropbox\projects\c\anonymity\vector.c
+	"main.h"
+
+1766041672 source:c:\dropbox\projects\c\anonymity\main.c
+	"main.h"
+
+1742447975 source:c:\dropbox\projects\c\anonymity\emscripten\auxdata.c
+	"main.h"
+
+1742448362 c:\dropbox\projects\c\anonymity\emscripten\main.h
+	<stdlib.h>
+	<stdio.h>
+	<stdarg.h>
+	<math.h>
+	<SDL3/SDL.h>
+	<emscripten.h>
+	<emscripten/html5.h>
+	<GLES3/gl3.h>
+	<SDL3/SDL.h>
+	<SDL3/SDL_opengl.h>
+	"queue.h"
+	"vector.h"
+	"shader.h"
+	"font.h"
+	"text.h"
+	"graphics.h"
+	"history_tree.h"
+	"entity.h"
+	"examples.h"
+	"network.h"
+	"auxdata.h"
+	"stabilizing_algo.h"
+	"terminating_algo.h"
+	"render.h"
+	"events.h"
+
+1652057608 c:\dropbox\projects\c\anonymity\emscripten\queue.h
+
+1651669609 c:\dropbox\projects\c\anonymity\emscripten\vector.h
+
+1742432372 c:\dropbox\projects\c\anonymity\emscripten\graphics.h
+
+1742437357 c:\dropbox\projects\c\anonymity\emscripten\history_tree.h
+
+1742437797 c:\dropbox\projects\c\anonymity\emscripten\entity.h
+
+1652429002 c:\dropbox\projects\c\anonymity\emscripten\examples.h
+
+1742389291 c:\dropbox\projects\c\anonymity\emscripten\network.h
+
+1742429622 c:\dropbox\projects\c\anonymity\emscripten\auxdata.h
+
+1651893291 c:\dropbox\projects\c\anonymity\emscripten\stabilizing_algo.h
+
+1702131525 c:\dropbox\projects\c\anonymity\emscripten\terminating_algo.h
+
+1742342992 c:\dropbox\projects\c\anonymity\emscripten\render.h
+
+1742360532 c:\dropbox\projects\c\anonymity\emscripten\events.h
+
+1742438123 source:c:\dropbox\projects\c\anonymity\emscripten\entity.c
+	"main.h"
+
+1742442420 source:c:\dropbox\projects\c\anonymity\emscripten\events.c
+	"main.h"
+
+1742401845 source:c:\dropbox\projects\c\anonymity\emscripten\examples.c
+	"main.h"
+
+1742434156 source:c:\dropbox\projects\c\anonymity\emscripten\graphics.c
+	"main.h"
+
+1742437885 source:c:\dropbox\projects\c\anonymity\emscripten\history_tree.c
+	"main.h"
+
+1742401316 source:c:\dropbox\projects\c\anonymity\emscripten\main.c
+	"main.h"
+
+1742436726 source:c:\dropbox\projects\c\anonymity\emscripten\network.c
+	"main.h"
+
+1652057608 source:c:\dropbox\projects\c\anonymity\emscripten\queue.c
+	"main.h"
+
+1742439199 source:c:\dropbox\projects\c\anonymity\emscripten\render.c
+	"main.h"
+
+1741035954 source:c:\dropbox\projects\c\anonymity\emscripten\stabilizing_algo.c
+	"main.h"
+
+1702165239 source:c:\dropbox\projects\c\anonymity\emscripten\terminating_algo.c
+	"main.h"
+
+1651669609 source:c:\dropbox\projects\c\anonymity\emscripten\vector.c
+	"main.h"
+
+1742344659 c:\dropbox\projects\c\anonymity\emscripten\shader.h
+
+1742344682 source:c:\dropbox\projects\c\anonymity\emscripten\shader.c
+	"main.h"
+
+1742347121 c:\dropbox\projects\c\anonymity\emscripten\font.h
+
+1742347140 source:c:\dropbox\projects\c\anonymity\emscripten\font.c
+	"main.h"
+
+1742343629 c:\dropbox\projects\c\anonymity\emscripten\text.h
+
+1742347752 source:c:\dropbox\projects\c\anonymity\emscripten\text.c
+	"main.h"
+
+1742344659 c:\dropbox\projects\c\anonymity\shader.h
+
+1742347121 c:\dropbox\projects\c\anonymity\font.h
+
+1742343629 c:\dropbox\projects\c\anonymity\text.h
+
+1742347140 source:c:\dropbox\projects\c\anonymity\font.c
+	"main.h"
+
+1742344682 source:c:\dropbox\projects\c\anonymity\shader.c
+	"main.h"
+
+1742347752 source:c:\dropbox\projects\c\anonymity\text.c
+	"main.h"
+
+1743064122 c:\dropbox\projects\c\anonymity\buffer.h
+
+1743065620 source:c:\dropbox\projects\c\anonymity\buffer.c
+	"main.h"
+
