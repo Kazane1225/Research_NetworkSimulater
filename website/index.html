@@ -5,55 +5,171 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, viewport-fit=cover">
     <title>Anonymous Dynamic Networks</title>
-    <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            background-color: white;
-        }
-
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            top: 0;
-            left: 0;
-            background-color: white;
-            user-select: none;
-            -webkit-user-select: none;
-            -moz-user-select: none;
-            -ms-user-select: none;
-            -webkit-touch-callout: none;
-            -webkit-tap-highlight-color: transparent;
-        }
-    </style>
+    <link rel="stylesheet" href="css/style.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
 </head>
 
 <body>
+
+<!-- ── Toolbar ────────────────────────────────────────────────────── -->
+<div id="toolbar">
+
+    <!-- Round navigation -->
+    <span class="tb-label">Round</span>
+    <button class="tb-btn icon-only" id="btn-prev-round" tabindex="-1" data-tip="Previous round  ↑">▲</button>
+    <button class="tb-btn icon-only" id="btn-next-round" tabindex="-1" data-tip="Next round  ↓">▼</button>
+    <button class="tb-btn icon-only" id="btn-add-round"  tabindex="-1" data-tip="Insert round  +">+</button>
+    <button class="tb-btn icon-only" id="btn-del-round"  tabindex="-1" data-tip="Delete round  −">−</button>
+    <button class="tb-btn icon-only" id="btn-clear-round" tabindex="-1" data-tip="Clear all links in round  Backspace">⌫</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- Algorithm selector -->
+    <span class="tb-label">Algorithm</span>
+    <div class="algo-group">
+        <button class="tb-btn active" id="algo-none" tabindex="-1" data-tip="No algorithm">None</button>
+        <button class="tb-btn"        id="algo-stab" tabindex="-1" data-tip="Stabilizing counting">Stabilizing</button>
+        <button class="tb-btn"        id="algo-term" tabindex="-1" data-tip="Terminating counting">Terminating</button>
+    </div>
+    <button class="tb-btn" id="btn-step" tabindex="-1" data-tip="Execute one algorithm step  Space" disabled>▶ Step</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- Network editing -->
+    <span class="tb-label">Edit</span>
+    <button class="tb-btn" id="btn-delete-agent" tabindex="-1" data-tip="Delete selected agent  Del">✕ Agent</button>
+    <button class="tb-btn" id="btn-deselect"     tabindex="-1" data-tip="Deselect / cancel  Esc">⊘ Deselect</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- File -->
+    <button class="tb-btn" id="btn-load" tabindex="-1" data-tip="Load network from file  L">📂 Load</button>
+    <button class="tb-btn" id="btn-save" tabindex="-1" data-tip="Save network to file  S">💾 Save</button>
+
+    <div class="tb-sep"></div>
+
+    <!-- Options & Help -->
+    <button class="tb-btn" id="btn-options" tabindex="-1" data-tip="Display options">⚙ Options</button>
+    <button class="tb-btn" id="btn-help"    tabindex="-1" data-tip="Keyboard reference  H">? Help</button>
+
+</div>
+
+<!-- ── Options popover ────────────────────────────────────────────── -->
+<div id="options-panel">
+    <div class="opt-row" id="opt-outdegree">
+        <span class="opt-label">Toggle outdegree awareness</span>
+        <span class="opt-key">O</span>
+    </div>
+    <div class="opt-row" id="opt-arrows">
+        <span class="opt-label">Toggle arrowheads</span>
+        <span class="opt-key">A</span>
+    </div>
+    <div class="opt-sep"></div>
+    <div class="opt-row" id="opt-round-nodes">
+        <span class="opt-label">Toggle round / square nodes</span>
+        <span class="opt-key">B</span>
+    </div>
+    <div class="opt-row" id="opt-highlight">
+        <span class="opt-label">Toggle current-level highlight</span>
+        <span class="opt-key">C</span>
+    </div>
+    <div class="opt-row" id="opt-red-edge">
+        <span class="opt-label">Cycle red-edge draw mode</span>
+        <span class="opt-key">D</span>
+    </div>
+    <div class="opt-sep"></div>
+    <div class="opt-row" id="opt-grid">
+        <span class="opt-label">Snap agents to grid</span>
+        <span class="opt-key">G</span>
+    </div>
+    <div class="opt-row" id="opt-caps">
+        <span class="opt-label">Two-way links by default (Caps Lock)</span>
+        <span class="opt-key">⇪</span>
+    </div>
+</div>
+
+<!-- ── Canvas wrapper ─────────────────────────────────────────────── -->
+<div id="canvas-wrap">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <span class="panel-label" id="label-network">Network</span>
+    <span class="panel-label" id="label-history">History Tree</span>
+</div>
 
-    <script>
-        const canvas = document.getElementById("canvas");
+<!-- ── Help modal ────────────────────────────────────────────────── -->
+<div id="help-modal">
+    <div id="help-box">
+        <div id="help-header">
+            <h2>Anonymous Dynamic Networks — Controls</h2>
+            <button id="help-close">✕ Close</button>
+        </div>
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
+        <h3>Mouse — Network Panel</h3>
+        <table>
+            <tr><td>Left-click + drag on agent</td><td>Draw a new directed link from that agent</td></tr>
+            <tr><td>Right-click + drag on agent</td><td>Move the agent</td></tr>
+            <tr><td>Right-click on empty area</td><td>Create a new agent</td></tr>
+            <tr><td>Left-click on agent / node</td><td>Select / deselect</td></tr>
+            <tr><td>Mouse wheel</td><td>Change current round</td></tr>
+        </table>
 
-        window.addEventListener("resize", resizeCanvas);
-        resizeCanvas();
+        <h3>Modifiers while drawing or deleting a link</h3>
+        <table>
+            <tr><td>Ctrl  or  Q</td><td>Delete the link instead of creating it</td></tr>
+            <tr><td>Shift</td><td>Make the link two-way (bidirectional)</td></tr>
+            <tr><td>Alt</td><td>Apply the change to all rounds</td></tr>
+            <tr><td>Caps Lock</td><td>Toggle: two-way becomes the default direction</td></tr>
+        </table>
 
-        var Module = {
-            canvas: canvas
-        };
-    </script>
+        <h3>Navigation</h3>
+        <table>
+            <tr><td>↑ / ↓</td><td>Previous / next round</td></tr>
+            <tr><td>← / →</td><td>Previous / next anonymity class in current view</td></tr>
+            <tr><td>ESC</td><td>Deselect agents and clear view selection</td></tr>
+        </table>
 
-    <script src="index.js"></script>
+        <h3>Network Editing</h3>
+        <table>
+            <tr><td>Del  or  U</td><td>Delete selected agent(s)</td></tr>
+            <tr><td>+</td><td>Insert a new round after the current round</td></tr>
+            <tr><td>−</td><td>Delete the current round</td></tr>
+            <tr><td>Backspace</td><td>Delete all links in the current round</td></tr>
+            <tr><td>0 – 9</td><td>Set input of selected agent (0 = leader L)</td></tr>
+            <tr><td>L</td><td>Load network from file</td></tr>
+            <tr><td>S</td><td>Save network to file</td></tr>
+            <tr><td>G</td><td>Snap all agents to grid</td></tr>
+        </table>
+
+        <h3>Counting Algorithms  (TAB cycles, Space steps)</h3>
+        <table>
+            <tr><td>Tab</td><td>Cycle: None → Stabilizing → Terminating → None</td></tr>
+            <tr><td>Space</td><td>Execute one algorithm step (select an agent or history node first)</td></tr>
+        </table>
+        <table style="margin-top:6px">
+            <tr><td style="color:#ffff00">Yellow node</td><td>Not yet guessed</td></tr>
+            <tr><td style="color:#80ff80">Green node</td><td>Correctly guessed / counted</td></tr>
+            <tr><td style="color:#ff8080">Red node</td><td>Incorrectly guessed (Stabilizing)</td></tr>
+            <tr><td style="color:#00cfcf">Cyan node</td><td>Initial-level guess (Terminating)</td></tr>
+            <tr><td style="color:#ffc040">Orange node</td><td>Intermediate guess (Terminating)</td></tr>
+        </table>
+
+        <h3>Display Options</h3>
+        <table>
+            <tr><td>O</td><td>Toggle outdegree awareness of agents</td></tr>
+            <tr><td>A</td><td>Toggle arrowheads on edges</td></tr>
+            <tr><td>D</td><td>Cycle red-edge draw mode: all → selected view → hidden</td></tr>
+            <tr><td>B</td><td>Toggle round / square nodes</td></tr>
+            <tr><td>C</td><td>Toggle grey highlight bar on current level</td></tr>
+            <tr><td>H</td><td>Show this reference</td></tr>
+        </table>
+
+        <div id="help-ref">
+            Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a>
+        </div>
+    </div>
+</div>
+
+<script src="js/ui.js"></script>
+<script src="index.js"></script>
 </body>
 
 </html>

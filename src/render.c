@@ -116,8 +116,8 @@ static void RenderNetwork(WindowData *win,float rx,float ry){
     PrepareRenderLine();
     for(int i=network->entities->tot-1;i>=0;i--){
         Entity *e=GetEntity(i);
-        if(i==selectedEntity || CorrespondsToSelectedNode(e))SetColor(255,255,0);
-        else SetColor(255,255,255);
+        if(i==selectedEntity || CorrespondsToSelectedNode(e))SetColor(88,166,255);
+        else SetColor(230,237,243);
         DrawEllipse(win,Patch(e->x,true),e->y,rx,ry,true,2,DISCRETIZE_RENDERING);
         if(currentRound<-1)continue;
         if(!e->input)DrawEllipse(win,Patch(e->x,true),e->y,rx*LINK_LABEL_SIZE,ry*LINK_LABEL_SIZE,false,2,DISCRETIZE_RENDERING);
@@ -134,7 +134,7 @@ static void RenderNetwork(WindowData *win,float rx,float ry){
 static void RenderHistoryTree(WindowData *win,float rx,float ry){
     SetWidth(3.0f);
     if(renderBar){ // render gray bar on current level
-        SetColor(208,208,208);
+        SetColor(22,27,34);
         AuxData *data=GetAuxData(currentRound+2,0);
         DrawRectangle(win,Patch(0,false),data->y,-Patch(0,true),ry,true,false,false);
     }
@@ -142,13 +142,13 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
         for(int j=0;j<GetLevel(i)->tot;j++){
             AuxData *data=GetAuxData(i,j);
             AuxData *parent=GetAuxData(i-1,data->parent);
-            if(!selectedNode || data->visible)SetColor(0,0,0);
-            else SetColor(128,128,128);
+            if(!selectedNode || data->visible)SetColor(139,148,158);
+            else SetColor(72,79,88);
             SetWidth(!selectedNode || data->visible?8.0f:3.0f);
             DrawLine(win,Patch(data->x,false),data->y,Patch(parent->x,false),parent->y,DISCRETIZE_RENDERING);
         }
     if(renderLinks<2){
-        SetColor(255,0,0);
+        SetColor(255,112,112);
         for(int i=0;i<aux->tot;i++) // render red edges
             for(int j=0;j<GetLevel(i)->tot;j++){
                 AuxData *data=GetAuxData(i,j);
@@ -197,20 +197,20 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
             if(data->visible){
                 if(algorithm==1){
                     if(data->guess!=-1){
-                        if(data->guess==data->anonymity)SetColor(128,255,128);
-                        else SetColor(255,128,128);
+                        if(data->guess==data->anonymity)SetColor(86,211,100);
+                        else SetColor(255,112,112);
                     }
-                    else SetColor(255,255,0);
+                    else SetColor(227,179,65);
                 }
                 else if(algorithm==2){
-                    if(data->i<=1 && data->guess!=-1)SetColor(0,255,255);
-                    else if(data->counted)SetColor(128,255,128);
-                    else if(data->guess!=-1)SetColor(255,192,64);
-                    else SetColor(255,255,0);
+                    if(data->i<=1 && data->guess!=-1)SetColor(57,216,245);
+                    else if(data->counted)SetColor(86,211,100);
+                    else if(data->guess!=-1)SetColor(255,166,87);
+                    else SetColor(227,179,65);
                 }
-                else SetColor(255,255,0);
+                else SetColor(227,179,65);
             }
-            else SetColor(255,255,255);
+            else SetColor(48,54,61);
             SetWidth(3.0f);
             int border=!selectedNode || data->visible?2:1;
             if(roundNodes){
@@ -253,8 +253,8 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
 static void RenderHelp(void){
     SetFontProperties(0.35f,0.0f,FONT_EDGE*5);
     SetFontSize(FONT_SIZE*1.0f);
-    SetFontOutlineColor(0.0f,0.0f,0.0f);
-    SetFontColor(0.0f,0.0f,0.0f,1.0f);
+    SetFontOutlineColor(0.051f,0.067f,0.090f);
+    SetFontColor(0.784f,0.820f,0.851f,1.0f);
 
     int lines=sizeof(helpMessage)/sizeof(helpMessage[0]);
     for(int i=0;i<lines;i++)PrintString(-win1->aspect+0.05f,-1.0f+0.05f*(i+1)+((i==0||i==5||i==14||i==35)?0.025f:0.0f),false,"%s",helpMessage[i]);
@@ -288,7 +288,7 @@ void RenderWindow1(WindowData *win){
         return;
     }
     PrepareRenderLine();
-    SetColor(0,0,255);
+    SetColor(48,54,61);
     SetWidth(1.0f);
     if(SeparatorX()>1.0f){
         ClipRectPx(0,0,SeparatorX(),h);
@@ -308,16 +308,15 @@ void RenderWindow1(WindowData *win){
         RenderHistoryTree(win,rx,ry);
         ClipOff();
     }
-    SetColor(0,0,0);
-    if(resizeHover)SetWidth(5.0f);
-    else SetWidth(1.0f);
+    if(resizeHover){ SetColor(139,148,158); SetWidth(5.0f); }
+    else { SetColor(48,54,61); SetWidth(1.0f); }
     DrawLine(win1,separator,-1.0f,separator,1.0f,true);
     PrepareRenderText();
     SetFontProperties(0.15f,0.4f,FONT_EDGE*4);
     SetFontSize(FONT_SIZE*1.0f);
     SetFontOutlineColor(0.0f,0.0f,0.0f);
     if(network){
-        SetFontColor(0.9f,0.4f,0.0f,1.0f);
+        SetFontColor(0.545f,0.580f,0.620f,1.0f);
         PrintString(-win->aspect+0.025f,-1.0f+0.01f,false,"Round %d of %d",currentRound+1,network->rounds->tot);
         if(network->entities->tot==1)PrintString(-win->aspect+0.025f,-1.0f+0.07f,false,"1 agent");
         else PrintString(-win->aspect+0.025f,-1.0f+0.07f,false,"%d agents",network->entities->tot);

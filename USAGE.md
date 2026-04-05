@@ -18,13 +18,67 @@ Drag the vertical divider left or right to resize the panels.
 
 ---
 
+## Toolbar
+
+The toolbar at the top of the page provides quick access to all major functions.
+
+### Round
+| Button | Shortcut | Description |
+|--------|----------|-------------|
+| ▲ | `↑` | Go to previous round |
+| ▼ | `↓` | Go to next round |
+| + | `+` | Insert a new round after the current round |
+| − | `−` | Delete the current round |
+| ⌫ | `Backspace` | Clear all links in the current round |
+
+### Algorithm
+| Button | Description |
+|--------|-------------|
+| **None** | Disable counting algorithm (default) |
+| **Stabilizing** | Enable the stabilizing counting algorithm |
+| **Terminating** | Enable the terminating counting algorithm |
+| ▶ Step | `Space` — Execute one step of the active algorithm (requires a selection) |
+
+The active algorithm button is highlighted. You can also cycle through algorithms with **TAB**.
+
+### Edit
+| Button | Shortcut | Description |
+|--------|----------|-------------|
+| ✕ Agent | `Del` | Delete the currently selected agent |
+| ⊘ Deselect | `Esc` | Deselect agents and clear view selection |
+
+### File
+| Button | Shortcut | Description |
+|--------|----------|-------------|
+| 📂 Load | `L` | Open a file picker to load a network from a `.txt` file |
+| 💾 Save | `S` | Save the current network to `Network.txt` |
+
+### Options (⚙)
+Clicking **⚙ Options** opens a popover with display toggles:
+
+| Option | Shortcut | Description |
+|--------|----------|-------------|
+| Toggle outdegree awareness | `O` | Switch between outdegree-aware and unaware agent view |
+| Toggle arrowheads | `A` | Show or hide arrowheads on edges |
+| Toggle round / square nodes | `B` | Switch node shape |
+| Toggle current-level highlight | `C` | Show or hide the grey highlight bar on the current level |
+| Cycle red-edge draw mode | `D` | Cycle through: all edges → selected view only → hidden |
+| Snap agents to grid | `G` | Snap all agents to the nearest grid position |
+| Two-way links by default (Caps Lock) | `⇪` | When enabled, drawn links are bidirectional by default |
+
+### Help (?)
+Clicking **? Help** (or pressing **H**) opens the built-in keyboard reference overlay.
+
+---
+
 ## Getting Started
 
-1. Launch the app (`serve.bat` or `build.bat`) and open **http://localhost:8000/** in your browser.
+1. Launch the app (`serve.bat` or `build-docker.bat`) and open **http://localhost:8000/** in your browser.
 2. A default network is loaded automatically.
-3. Use the **Up / Down arrow keys** (or mouse wheel) to step through rounds.
-4. Press **TAB** to choose a counting algorithm; press **SPACE** to run it step by step.
-5. Press **H** at any time to display the built-in command reference overlay.
+3. Use the **▲ / ▼** toolbar buttons (or `↑` / `↓` keys, or mouse wheel) to step through rounds.
+4. Click **Stabilizing** or **Terminating** in the toolbar (or press **TAB**) to enable a counting algorithm.
+5. Click **▶ Step** (or press **Space**) with an agent selected to run the algorithm step by step.
+6. Click **? Help** (or press **H**) at any time to display the built-in command reference overlay.
 
 ---
 
