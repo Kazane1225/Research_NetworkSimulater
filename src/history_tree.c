@@ -124,11 +124,29 @@ HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest){ // returns c
 }
 
 bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2){ // does h1 contain an isomorphic copy of h2?
-    HistoryTree *t=CopyHistoryTree(h1,NULL);
-    bool added;
-    MergeHistoryTrees(t,h2,&added);
-    FreeHistoryTree(t);
-    return !added;
+    bool result=true;
+    Queue *q=NewQueue();
+    h2->reference=h1; // map root of h2 to root of h1
+    AppendQueue(q,h2);
+    while(!IsQueueEmpty(q)){
+        HistoryTree *a=PopQueue(q); // node in h2
+        if(!result)continue; // drain queue after failure
+        HistoryTree *b=a->reference; // corresponding node in h1
+        for(int i=0;i<a->children->tot;i++){
+            HistoryTree *x=a->children->items[i]; // child of a in h2
+            HistoryTree *y=NULL;
+            for(int j=0;j<b->children->tot;j++){
+                HistoryTree *z=b->children->items[j]; // child of b in h1
+                if(EquivalentNodes(x,z)){ y=z; break; }
+            }
+            if(!y){ result=false; break; } // no matching child found
+            x->reference=y;
+            AppendQueue(q,x);
+        }
+    }
+    FreeQueue(q);
+    ResetReferences(h2);
+    return result;
 }
 
 bool HistoryTreeEquals(HistoryTree *h1,HistoryTree *h2){ // is h1 isomorphic to h2?
