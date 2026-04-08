@@ -144,7 +144,7 @@ WindowData *NewWindow(const char *title,void(*renderFunction)(struct WindowData*
     SDL_GetWindowSize(win->window,&win->w,&win->h);
     SetWindowViewport(win);
     InitShader();
-    glClearColor(1.0f,1.0f,1.0f,1.0f);
+    glClearColor(0.051f,0.067f,0.090f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     SDL_GL_SwapWindow(win->window);
     win->invalid=true;
@@ -180,7 +180,7 @@ void SetWindowViewport(WindowData *win){
 void RenderWindow(WindowData *win){
     if(!win->invalid)return;
     SetWindowViewport(win);
-    glClearColor(1.0f,1.0f,1.0f,1.0f);
+    glClearColor(0.051f,0.067f,0.090f,1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
