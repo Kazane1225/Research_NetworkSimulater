@@ -3,14 +3,46 @@ const canvas     = document.getElementById('canvas');
 const canvasWrap = document.getElementById('canvas-wrap');
 
 function resizeCanvas() {
-    canvas.width  = canvasWrap.clientWidth;
-    canvas.height = canvasWrap.clientHeight;
+    const dpr = window.devicePixelRatio || 1;
+    const w   = canvasWrap.clientWidth;
+    const h   = canvasWrap.clientHeight;
+    // Set buffer to device pixels so WebGL/SDL draws at full physical resolution.
+    canvas.width  = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    // Keep CSS display size equal to the logical (CSS) pixel size so the canvas
+    // fills the container without overflowing regardless of DPR or browser zoom.
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// ── Toolbar scroll-fade hint ──────────────────────────────────
+const toolbar = document.getElementById('toolbar');
+function checkToolbarScroll() {
+    const atEnd = toolbar.scrollLeft + toolbar.clientWidth >= toolbar.scrollWidth - 2;
+    toolbar.classList.toggle('scrolled-end', atEnd);
+}
+toolbar.addEventListener('scroll', checkToolbarScroll);
+window.addEventListener('resize', checkToolbarScroll);
+checkToolbarScroll();
+
 // Emscripten Module entry point (must be set before index.js loads)
-var Module = { canvas };
+function _showError(msg) {
+    const el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,.8)';
+    el.innerHTML = `<pre style="background:#1c2128;color:#f85149;border:1px solid #f85149;border-radius:8px;padding:20px;max-width:80%;white-space:pre-wrap;font-size:13px">${msg}</pre>`;
+    document.body.appendChild(el);
+    el.addEventListener('click', () => el.remove());
+}
+window.addEventListener('error', e => _showError(`JS Error: ${e.message}\n${e.filename}:${e.lineno}`));
+
+var Module = {
+    canvas,
+    onAbort:  msg => _showError(`WASM Abort:\n${msg}`),
+    onExit:   code => { if (code !== 0) _showError(`WASM terminated (exit code ${code})\nCheck the browser console (F12) for SDL / WebGL errors from [wasm]`); },
+    printErr: msg => { console.error('[wasm]', msg); },
+};
 
 // ── Synthetic keyboard dispatch ───────────────────────────────
 // Emscripten registers its listener on window (capture phase).
@@ -79,6 +111,13 @@ document.getElementById('btn-options').addEventListener('click', e => {
 document.addEventListener('click', () => optPanel.classList.remove('open'));
 optPanel.addEventListener('click', e => e.stopPropagation());
 
+// Close options panel on Escape
+window.addEventListener('keydown', e => {
+    if (e.code === 'Escape' && optPanel.classList.contains('open')) {
+        optPanel.classList.remove('open');
+    }
+});
+
 document.getElementById('opt-outdegree')  .addEventListener('click', () => pressKey('o', 'KeyO'));
 document.getElementById('opt-arrows')     .addEventListener('click', () => pressKey('a', 'KeyA'));
 document.getElementById('opt-round-nodes').addEventListener('click', () => pressKey('b', 'KeyB'));
@@ -94,8 +133,8 @@ document.getElementById('opt-caps')       .addEventListener('click', () => {
 // ── Help modal ────────────────────────────────────────────────
 const helpModal = document.getElementById('help-modal');
 
-function openHelp()  { helpModal.classList.add('open');    }
-function closeHelp() { helpModal.classList.remove('open'); }
+function openHelp()  { helpModal.classList.add('open');    document.body.classList.add('modal-open'); }
+function closeHelp() { helpModal.classList.remove('open'); document.body.classList.remove('modal-open'); }
 
 document.getElementById('btn-help') .addEventListener('click', openHelp);
 document.getElementById('help-close').addEventListener('click', closeHelp);

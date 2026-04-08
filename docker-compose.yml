@@ -1,0 +1,19 @@
+services:
+  build:
+    build: .
+    volumes:
+      - .:/project
+      - ${SDL3_PREFIX}:/sdl3prefix:ro
+
+  serve:
+    image: node:lts-alpine
+    working_dir: /app
+    volumes:
+      - ./website:/app/website:ro
+      - ./scripts:/app/scripts:ro
+    ports:
+      - "9000:9000"
+    command: node scripts/serve.js 9000
+    depends_on:
+      build:
+        condition: service_completed_successfully

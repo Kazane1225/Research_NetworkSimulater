@@ -58,6 +58,50 @@ serve.bat
 
 ---
 
+## Building and Serving with Docker
+
+A Docker Compose setup is provided for building and running the simulator without installing Emscripten or SDL3 locally. All you need is Docker Desktop.
+
+### Configure the SDL3 path
+
+On first use, check the `.env` file in the project root and adjust the SDL3 prefix path if needed:
+
+```
+SDL3_PREFIX=C:/Emscripten/libs/sdl3minimal/prefix
+```
+
+### Build only
+
+Runs emcc inside an `emscripten/emsdk:latest` container and writes output to `website/`.
+
+```
+docker compose run --rm build
+```
+
+### Build and start the server (one command)
+
+```
+docker compose up --build
+```
+
+The development server starts automatically on port 9000 after the build completes. Open **http://localhost:9000/** in your browser.
+
+### Start the server only (when already built)
+
+```
+docker compose up serve
+```
+
+### Stop the server
+
+```
+docker compose stop serve
+```
+
+> **Note:** If port 9000 is already in use, edit the `ports` and `command` entries for the `serve` service in `docker-compose.yml` to use a different port.
+
+---
+
 ## Project Structure
 
 ```
