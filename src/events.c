@@ -280,12 +280,6 @@ static void KeyPressed(SDL_Keycode key){
             numSteps=-1;
             CountingAlgorithm();
             win1->invalid=true;
-            switch(algorithm){
-                case 0: DisplayMessage("Execute no counting algorithm"); break;
-                case 1: DisplayMessage("Execute stabilizing counting algorithm"); break;
-                case 2: DisplayMessage("Execute terminating counting algorithm"); break;
-                default: break;
-            }
             break;
         case SDLK_O:
             outAware=!outAware;

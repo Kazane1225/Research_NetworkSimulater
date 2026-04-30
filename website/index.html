@@ -16,11 +16,11 @@
 
     <!-- Round navigation -->
     <span class="tb-label">Round</span>
-    <button class="tb-btn icon-only" id="btn-prev-round" tabindex="-1" data-tip="Previous round  ↑">▲</button>
-    <button class="tb-btn icon-only" id="btn-next-round" tabindex="-1" data-tip="Next round  ↓">▼</button>
-    <button class="tb-btn icon-only" id="btn-add-round"  tabindex="-1" data-tip="Insert round  +">+</button>
-    <button class="tb-btn icon-only" id="btn-del-round"  tabindex="-1" data-tip="Delete round  −">−</button>
-    <button class="tb-btn icon-only" id="btn-clear-round" tabindex="-1" data-tip="Clear all links in round  Backspace">⌫</button>
+    <button class="tb-btn icon-only" id="btn-prev-round" tabindex="-1" data-tip="Previous round  ↑"><i data-lucide="chevron-up"></i></button>
+    <button class="tb-btn icon-only" id="btn-next-round" tabindex="-1" data-tip="Next round  ↓"><i data-lucide="chevron-down"></i></button>
+    <button class="tb-btn icon-only" id="btn-add-round"  tabindex="-1" data-tip="Insert round  +"><i data-lucide="plus"></i></button>
+    <button class="tb-btn icon-only" id="btn-del-round"  tabindex="-1" data-tip="Delete round  −"><i data-lucide="minus"></i></button>
+    <button class="tb-btn icon-only" id="btn-clear-round" tabindex="-1" data-tip="Clear all links in round  Backspace"><i data-lucide="eraser"></i></button>
 
     <div class="tb-sep"></div>
 
@@ -31,26 +31,29 @@
         <button class="tb-btn"        id="algo-stab" tabindex="-1" data-tip="Stabilizing counting">Stabilizing</button>
         <button class="tb-btn"        id="algo-term" tabindex="-1" data-tip="Terminating counting">Terminating</button>
     </div>
-    <button class="tb-btn" id="btn-step" tabindex="-1" data-tip="Execute one algorithm step  Space" disabled>▶ Step</button>
+    <button class="tb-btn" id="btn-step" tabindex="-1" data-tip="Execute one algorithm step  Space" disabled><i data-lucide="play"></i> Step</button>
 
     <div class="tb-sep"></div>
 
     <!-- Network editing -->
     <span class="tb-label">Edit</span>
-    <button class="tb-btn" id="btn-delete-agent" tabindex="-1" data-tip="Delete selected agent  Del">✕ Agent</button>
-    <button class="tb-btn" id="btn-deselect"     tabindex="-1" data-tip="Deselect / cancel  Esc">⊘ Deselect</button>
+    <button class="tb-btn" id="btn-delete-agent" tabindex="-1" data-tip="Delete selected agent  Del"><i data-lucide="user-x"></i> Agent</button>
+    <button class="tb-btn" id="btn-deselect"     tabindex="-1" data-tip="Deselect / cancel  Esc"><i data-lucide="x-circle"></i> Deselect</button>
 
     <div class="tb-sep"></div>
 
     <!-- File -->
-    <button class="tb-btn" id="btn-load" tabindex="-1" data-tip="Load network from file  L">📂 Load</button>
-    <button class="tb-btn" id="btn-save" tabindex="-1" data-tip="Save network to file  S">💾 Save</button>
+    <button class="tb-btn" id="btn-load" tabindex="-1" data-tip="Load network from file  L"><i data-lucide="folder-open"></i> Load</button>
+    <button class="tb-btn" id="btn-save" tabindex="-1" data-tip="Save network to file  S"><i data-lucide="save"></i> Save</button>
 
     <div class="tb-sep"></div>
 
     <!-- Options & Help -->
-    <button class="tb-btn" id="btn-options" tabindex="-1" data-tip="Display options">⚙ Options</button>
-    <button class="tb-btn" id="btn-help"    tabindex="-1" data-tip="Keyboard reference  H">? Help</button>
+    <button class="tb-btn" id="btn-options"  tabindex="-1" data-tip="Display options"><i data-lucide="settings-2"></i> Options</button>
+    <button class="tb-btn" id="btn-glossary" tabindex="-1" data-tip="Concept glossary"><i data-lucide="book-open"></i> Glossary</button>
+    <button class="tb-btn" id="btn-tutorial" tabindex="-1" data-tip="UI overview tour"><i data-lucide="map"></i> Tour</button>
+    <button class="tb-btn" id="btn-learn"    tabindex="-1" data-tip="Interactive guided tutorial"><i data-lucide="graduation-cap"></i> Learn</button>
+    <button class="tb-btn" id="btn-help"     tabindex="-1" data-tip="Keyboard reference  H"><i data-lucide="help-circle"></i> Help</button>
 
 </div>
 
@@ -88,11 +91,59 @@
     </div>
 </div>
 
+<!-- ── Algorithm explanation banner ─────────────────────────────── -->
+<div id="algo-banner">
+    <div id="algo-banner-body">
+        <div id="algo-banner-left">
+            <span id="algo-banner-title"></span>
+            <span id="algo-banner-desc"></span>
+        </div>
+        <div id="algo-banner-right">
+            <div class="algo-stat">
+                <span class="algo-stat-label">Uniquely identified</span>
+                <span class="algo-stat-val"><span id="ab-unique">0</span> / <span id="ab-agents">?</span> agents</span>
+            </div>
+            <div class="algo-stat">
+                <span class="algo-stat-label">Anonymity classes</span>
+                <span class="algo-stat-val" id="ab-classes">—</span>
+            </div>
+            <div class="algo-stat">
+                <span class="algo-stat-label" id="ab-bound-label">Bound</span>
+                <span class="algo-stat-val" id="ab-bound">—</span>
+            </div>
+        </div>
+    </div>
+    <div id="algo-banner-hint">Select an agent or history-tree node, then press <kbd>Space</kbd> (or <strong>▶ Step</strong>) to execute one step.</div>
+</div>
+
 <!-- ── Canvas wrapper ─────────────────────────────────────────────── -->
 <div id="canvas-wrap">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
     <span class="panel-label" id="label-network">Network</span>
     <span class="panel-label" id="label-history">History Tree</span>
+
+    <!-- ── Node-colour legend (History Tree panel, bottom-right) ── -->
+    <div id="node-legend">
+        <div class="legend-title">Node colours</div>
+        <div class="legend-item" id="leg-yellow"><span class="leg-dot" style="background:#ffff00"></span>Not yet guessed</div>
+        <div class="legend-item" id="leg-green" ><span class="leg-dot" style="background:#80ff80"></span>Correctly guessed / counted</div>
+        <div class="legend-item leg-stab"        ><span class="leg-dot" style="background:#ff8080"></span>Incorrectly guessed <span class="leg-tag">(Stabilizing)</span></div>
+        <div class="legend-item leg-term"        ><span class="leg-dot" style="background:#00cfcf"></span>Initial-level guess <span class="leg-tag">(Terminating)</span></div>
+        <div class="legend-item leg-term"        ><span class="leg-dot" style="background:#ffc040"></span>Intermediate guess <span class="leg-tag">(Terminating)</span></div>
+    </div>
+
+    <!-- ── Network stats panel (Network panel, bottom-left) ── -->
+    <div id="net-stats">
+        <div class="stats-title">Network Stats</div>
+        <div class="stats-grid">
+            <span class="stats-label">Agents <em>(n)</em></span>         <span class="stats-val" id="stat-agents">—</span>
+            <span class="stats-label">Leaders</span>                      <span class="stats-val" id="stat-leaders">—</span>
+            <span class="stats-label">Rounds <em>(T)</em></span>          <span class="stats-val" id="stat-rounds">—</span>
+            <span class="stats-label">Links (this round)</span>           <span class="stats-val" id="stat-links">—</span>
+            <span class="stats-label">Anonymity classes</span>            <span class="stats-val" id="stat-classes">—</span>
+            <span class="stats-label">Uniquely identified</span>          <span class="stats-val" id="stat-unique">—</span>
+        </div>
+    </div>
 </div>
 
 <!-- ── Help modal ────────────────────────────────────────────────── -->
@@ -168,6 +219,114 @@
     </div>
 </div>
 
+<!-- ── Glossary modal ───────────────────────────────────────────── -->
+<div id="glossary-modal">
+    <div id="glossary-box">
+        <div id="glossary-header">
+            <h2>Anonymous Dynamic Networks — Glossary</h2>
+            <button id="glossary-close">✕ Close</button>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Agent</div>
+            <div class="gl-def">A computing entity in the network. Agents have no unique identifiers — they are <em>anonymous</em>. Each agent starts with an integer <em>input</em> value (0 = leader).</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Leader</div>
+            <div class="gl-def">A special agent with input 0, shown as <strong>L</strong> in the simulator. Counting algorithms use the leader as a reference point to determine the total number of agents <em>n</em>.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Dynamic Network</div>
+            <div class="gl-def">A network whose communication links can change every round. Unlike static networks, edges are not permanent — they may be controlled by an adversary. The key challenge is that agents cannot rely on a fixed topology.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Round</div>
+            <div class="gl-def">One time step of communication. In each round a set of directed links is active and agents exchange messages only along those links. Use <strong>↑ / ↓</strong> or the scroll wheel to browse rounds in the simulator.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Interaction (Link)</div>
+            <div class="gl-def">A directed edge from agent A to agent B in a given round: A sends a message to B. The <em>multiplicity</em> counts how many parallel copies of the message are sent, which matters for the counting algorithms.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">History Tree</div>
+            <div class="gl-def">A tree that records everything an agent has observed so far. The root is the initial state; each level adds one more round of observations. Two agents are <em>indistinguishable</em> if and only if they share the same history tree. The right panel of the simulator visualises this tree.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Anonymity Class</div>
+            <div class="gl-def">A group of agents with <em>identical</em> history trees — they cannot tell each other apart. The size of the class is its <em>anonymity</em>. An anonymity of 1 means the agent is uniquely identifiable by its history.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Counting Problem</div>
+            <div class="gl-def">The task of determining the total number of agents <em>n</em>. Because agents are anonymous they cannot simply count themselves — they must deduce <em>n</em> from the patterns of messages received over multiple rounds.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Stabilizing Algorithm</div>
+            <div class="gl-def">An algorithm that eventually outputs the correct answer and <em>never changes it again</em>, but may output wrong values before it stabilises. The simulator's stabilizing algorithm is guaranteed to stabilise by round 2n − 2. Select it with the <strong>Stabilizing</strong> button.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Terminating Algorithm</div>
+            <div class="gl-def">An algorithm that outputs the correct answer and then <em>halts</em>, explicitly signalling that it is done. This is a stronger guarantee than stabilizing: once it stops, the answer is provably correct. Select it with the <strong>Terminating</strong> button.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Outdegree Awareness</div>
+            <div class="gl-def">An optional capability (toggle with <strong>O</strong>) where each agent also knows how many messages it <em>sent</em> in the previous round. This extra information can help the algorithm make faster or more accurate guesses.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Exposed Pair</div>
+            <div class="gl-def">Two agents A and B such that A observes B and B observes A with matching multiplicities. Exposed pairs are the key mechanism the stabilizing algorithm uses to propagate anonymity estimates across the network.</div>
+        </div>
+
+        <div id="glossary-ref">
+            Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a>
+        </div>
+    </div>
+</div>
+
+<!-- ── Tutorial panel (UI Tour) ───────────────────────────────── -->
+<div id="tutorial-panel">
+    <div id="tutorial-header">
+        <span id="tutorial-indicator"></span>
+        <button id="tutorial-close" aria-label="Close tutorial">✕</button>
+    </div>
+    <div id="tutorial-title"></div>
+    <div id="tutorial-body"></div>
+    <div id="tutorial-footer">
+        <button class="tut-btn" id="tutorial-prev">← Prev</button>
+        <button class="tut-btn tut-primary" id="tutorial-next">Next →</button>
+    </div>
+</div>
+
+<!-- ── Guided tutorial panel ────────────────────────────────── -->
+<div id="guided-panel">
+    <div id="guided-header">
+        <div id="guided-badge">🎓 Learn</div>
+        <span id="guided-indicator"></span>
+        <button id="guided-close" aria-label="Close">✕</button>
+    </div>
+    <div id="guided-title"></div>
+    <div id="guided-body"></div>
+    <div id="guided-action" style="display:none">
+        <span id="guided-action-icon">&#128075;</span>
+        <span id="guided-action-text"></span>
+    </div>
+    <div id="guided-footer">
+        <button class="tut-btn" id="guided-skip">Skip →→</button>
+        <button class="tut-btn tut-primary" id="guided-next" style="display:none">Next →</button>
+    </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="js/ui.js"></script>
 <script src="index.js"></script>
 </body>

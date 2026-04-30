@@ -472,3 +472,118 @@ void SaveNetworkRun(const char *filename){
     SDL_free((char*)filename);
 }
 #endif
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE int GetNumAgents(void){
+    return network ? network->entities->tot : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetNumLeaders(void){
+    if(!network)return 0;
+    int l=0;
+    for(int i=0;i<network->entities->tot;i++)
+        if(GetEntity(i)->input==0)l++;
+    return l;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetNumRounds(void){
+    return network ? network->rounds->tot : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetCurrentRound(void){
+    return currentRound; // 0-based; -1 if no rounds
+}
+
+EMSCRIPTEN_KEEPALIVE int GetCurrentRoundLinks(void){
+    if(!network || currentRound<0 || currentRound>=network->rounds->tot)return 0;
+    return ((Vector*)network->rounds->items[currentRound])->tot;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetNumAnonymityClasses(void){
+    if(!aux || aux->tot==0)return 0;
+    return GetLevel(aux->tot-1)->tot;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetNumUniqueAgents(void){
+    if(!aux || aux->tot==0)return 0;
+    Vector *lastLevel=GetLevel(aux->tot-1);
+    int count=0;
+    for(int j=0;j<lastLevel->tot;j++){
+        AuxData *data=lastLevel->items[j];
+        if(data->anonymity==1)count++;
+    }
+    return count;
+}
+
+// Tutorial network: 4 agents (1 leader + 3 anonymous), 3 dynamic rounds
+// Round 1: path  L-1-2-3
+// Round 2: L connects to 3 and 1; 1-2 remain
+// Round 3: L-2, L-1, 1-3
+EMSCRIPTEN_KEEPALIVE void TutorialLoadNetwork(void){
+    drawingEdge=draggingEntity=false;
+    selectedEntity=selectedNodeI=selectedNodeJ=-1;
+    selectedNode=NULL;
+    currentRound=-1;
+    DoneNetwork();
+    network=malloc(sizeof(Network));
+    network->entities=NewVector(8);
+    network->rounds=NewVector(8);
+    /* 6 agents arranged in a hexagon.
+     * Agent 0 = leader (input 0), agents 1-5 anonymous (input 1).
+     *
+     * Round 0 is a RING: L-1-2-3-4-5-L.
+     * This creates two symmetric classes:
+     *   {1,5}   - both see L + one anonymous agent (yellow after step 1)
+     *   {2,3,4} - all see two anonymous agents    (yellow after step 1)
+     * Rounds 1-4 break this symmetry so the algorithm converges to n=6. */
+    AddEntity(0, -0.65f,  0.0f);    /* 0: leader L */
+    AddEntity(1, -0.325f, 0.563f);  /* 1 */
+    AddEntity(1,  0.325f, 0.563f);  /* 2 */
+    AddEntity(1,  0.65f,  0.0f);    /* 3 */
+    AddEntity(1,  0.325f,-0.563f);  /* 4 */
+    AddEntity(1, -0.325f,-0.563f);  /* 5 */
+    /* Round 0: ring L-1-2-3-4-5-L */
+    InsertRound(0,false);
+    AddDoubleInteraction(0,0,1,1);
+    AddDoubleInteraction(0,1,2,1);
+    AddDoubleInteraction(0,2,3,1);
+    AddDoubleInteraction(0,3,4,1);
+    AddDoubleInteraction(0,4,5,1);
+    AddDoubleInteraction(0,5,0,1);
+    /* Round 1: L connects to 1 and 3 (breaks 1-5 symmetry) */
+    InsertRound(1,false);
+    AddDoubleInteraction(1,0,1,1);
+    AddDoubleInteraction(1,0,3,1);
+    AddDoubleInteraction(1,1,5,1);
+    AddDoubleInteraction(1,2,5,1);
+    AddDoubleInteraction(1,3,4,1);
+    /* Round 2: L connects to 2 and 4 */
+    InsertRound(2,false);
+    AddDoubleInteraction(2,0,2,1);
+    AddDoubleInteraction(2,0,4,1);
+    AddDoubleInteraction(2,1,3,1);
+    AddDoubleInteraction(2,2,5,1);
+    AddDoubleInteraction(2,3,5,1);
+    /* Round 3: L connects to 3 and 5 */
+    InsertRound(3,false);
+    AddDoubleInteraction(3,0,3,1);
+    AddDoubleInteraction(3,0,5,1);
+    AddDoubleInteraction(3,1,2,1);
+    AddDoubleInteraction(3,2,4,1);
+    AddDoubleInteraction(3,3,4,1);
+    /* Round 4: L connects to 1 and 2; additional cross-links */
+    InsertRound(4,false);
+    AddDoubleInteraction(4,0,1,1);
+    AddDoubleInteraction(4,0,2,1);
+    AddDoubleInteraction(4,1,4,1);
+    AddDoubleInteraction(4,3,5,1);
+    AddDoubleInteraction(4,4,5,1);
+    currentRound=0;
+    ExecuteNetwork();
+    win1->invalid=true;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetSelectedEntity(void){
+    return selectedEntity;
+}
+#endif

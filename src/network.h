@@ -39,3 +39,14 @@ void SaveNetwork(void);
 void LoadNetworkRun(const char *filename);
 void SaveNetworkRun(const char *filename);
 #endif
+#ifdef __EMSCRIPTEN__
+int GetNumAgents(void);
+int GetNumLeaders(void);
+int GetNumRounds(void);
+int GetCurrentRound(void);
+int GetCurrentRoundLinks(void);
+int GetNumAnonymityClasses(void);
+int GetNumUniqueAgents(void);
+void TutorialLoadNetwork(void);
+int GetSelectedEntity(void);
+#endif
