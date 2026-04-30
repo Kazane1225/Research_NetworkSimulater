@@ -615,8 +615,9 @@ body.modal-open { overflow: hidden; }
     position: fixed;
     bottom: 20px;
     right: 20px;
-    z-index: 180;
+    z-index: 210;
     width: 320px;
+    overflow: visible;
     background: #161b22;
     border: 1px solid #388bfd;
     border-radius: 10px;
@@ -633,6 +634,30 @@ body.modal-open { overflow: hidden; }
 @keyframes tutSlide {
     from { transform: translateY(12px); opacity: 0; }
     to   { transform: translateY(0);    opacity: 1; }
+}
+/* Directional arrow nib pointing toward the highlighted element */
+#tutorial-panel::before {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border: 8px solid transparent;
+}
+#tutorial-panel[data-arrow="top"]::before {
+    top: -8px; left: 50%; transform: translateX(-50%);
+    border-bottom-color: #388bfd; border-top: none;
+}
+#tutorial-panel[data-arrow="bottom"]::before {
+    bottom: -8px; left: 50%; transform: translateX(-50%);
+    border-top-color: #388bfd; border-bottom: none;
+}
+#tutorial-panel[data-arrow="left"]::before {
+    left: -8px; top: 50%; transform: translateY(-50%);
+    border-right-color: #388bfd; border-left: none;
+}
+#tutorial-panel[data-arrow="right"]::before {
+    right: -8px; top: 50%; transform: translateY(-50%);
+    border-left-color: #388bfd; border-right: none;
 }
 #tutorial-header {
     display: flex;
@@ -691,17 +716,16 @@ body.modal-open { overflow: hidden; }
 .tut-primary { background: #0d419d; border-color: #388bfd; color: #e6edf3; }
 .tut-primary:hover { background: #1158cd; }
 
-/* Pulsing highlight on the element pointed to by the current tutorial step */
+/* Pulsing highlight ring on the element pointed to by the current tour step */
 .tutorial-highlight {
-    box-shadow: 0 0 0 2px #58a6ff, 0 0 12px 4px rgba(88,166,255,0.45) !important;
-    border-radius: 6px !important;
-    position: relative !important;
-    z-index: 30 !important;
+    outline: 2px solid #58a6ff !important;
+    outline-offset: 3px !important;
+    box-shadow: 0 0 14px 4px rgba(88,166,255,0.40) !important;
     animation: tutPulse 1.8s ease-in-out infinite;
 }
 @keyframes tutPulse {
-    0%,100% { box-shadow: 0 0 0 2px #58a6ff, 0 0 8px 3px rgba(88,166,255,0.35); }
-    50%      { box-shadow: 0 0 0 2px #58a6ff, 0 0 18px 7px rgba(88,166,255,0.65); }
+    0%,100% { box-shadow: 0 0 8px  3px rgba(88,166,255,0.30); }
+    50%      { box-shadow: 0 0 22px 8px rgba(88,166,255,0.65); }
 }
 
 /* ── Guided tutorial panel ────────────────────────────────────── */

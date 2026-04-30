@@ -262,48 +262,43 @@ setInterval(updateNetStats, 400);
 // ── UI Tour (existing tutorial) ─────────────────────────
 const TUTORIAL_STEPS = [
     {
-        title: 'Welcome',
-        text:  'This short tour introduces the key ideas behind anonymous dynamic networks. Use Next / Prev to navigate, or close the panel at any time. Click the Tour button in the toolbar to toggle this panel.',
+        title: 'Welcome to the Tour',
+        text:  'A quick walkthrough of the main UI areas. Press Next to continue, ← Prev to go back, or ✕ to close at any time.',
         sel:   null,
     },
     {
-        title: 'Step 1 — Agents',
-        text:  'The left panel shows the network. Each circle is an agent — a computing entity with no unique identifier. They are completely anonymous: no agent has a name or fixed ID.',
-        sel:   '#label-network',
+        title: 'The Canvas',
+        text:  'The main area is split in two. Left half: the network — circles are agents, anonymous computing entities with no unique ID. Right half: the History Tree — records what each agent has observed round by round. Two agents are indistinguishable if and only if their history trees are identical.',
+        sel:   '#canvas-wrap',
     },
     {
-        title: 'Step 2 — The History Tree',
-        text:  'The right panel shows the history tree: a record of everything each agent has observed, round by round. Two agents are indistinguishable if and only if their history trees are identical.',
-        sel:   '#label-history',
-    },
-    {
-        title: 'Step 3 — Dynamic Rounds',
-        text:  'The network topology can change every round — this is what makes it dynamic. Use ▲ / ▼ or the scroll wheel on the canvas to browse rounds and see how the edges evolve over time.',
+        title: 'Dynamic Rounds',
+        text:  'Edges can change every round — that\'s what makes the network dynamic. Use ▲ / ▼ in the toolbar or the scroll wheel on the canvas to step through rounds and watch the topology evolve.',
         sel:   '#btn-prev-round',
     },
     {
-        title: 'Step 4 — Loading a Network',
-        text:  'Click the Load button to open an example from the networks/ folder. DefaultNetwork2.txt is a good starting point; BoldiVigna.txt is a classic from the research literature.',
-        sel:   '#btn-load',
-    },
-    {
-        title: 'Step 5 — Counting Algorithms',
-        text:  'Select Stabilizing or Terminating from the Algorithm buttons. A description banner will appear below the toolbar explaining how the algorithm works and its theoretical round bound.',
+        title: 'Counting Algorithms',
+        text:  'Activate Stabilizing or Terminating to run a counting algorithm. A banner appears below the toolbar with a description of the algorithm and its theoretical round bound.',
         sel:   '.algo-group',
     },
     {
-        title: 'Step 6 — Stepping Through',
-        text:  'Left-click an agent or a history-tree node to select it, then press ▶ Step (or Space) to run one algorithm step. Watch nodes change colour in the History Tree as the algorithm deduces the count.',
+        title: 'Executing Steps',
+        text:  'Select an agent or history-tree node, then press ▶ Step (or Space) to run one algorithm step. History-tree nodes change colour as the algorithm deduces the network size.',
         sel:   '#btn-step',
     },
     {
-        title: 'Step 7 — Network Stats',
-        text:  'The Network Stats panel (bottom-left of the canvas) shows live information: agent count n, round count T, anonymity classes, and how many agents are already uniquely identified.',
+        title: 'Loading Networks',
+        text:  'Click Load to open an example from the networks/ folder. DefaultNetwork2.txt is a good starting point; BoldiVigna.txt is a well-known example from the research literature.',
+        sel:   '#btn-load',
+    },
+    {
+        title: 'Network Stats',
+        text:  'The Network Stats panel (bottom-left) shows live information: agent count n, round count T, anonymity classes, and how many agents are uniquely identified so far.',
         sel:   '#net-stats',
     },
     {
         title: 'All Done!',
-        text:  "You're ready to explore! Open the Glossary for key term definitions and Help for all keyboard shortcuts. Try loading different networks and comparing how the two algorithms behave.",
+        text:  'You\'re ready to explore! Open Glossary for key term definitions and Help (H) for keyboard shortcuts. Try loading different networks and comparing how both algorithms behave.',
         sel:   null,
     },
 ];
@@ -328,6 +323,53 @@ function clearTutHighlight() {
     }
 }
 
+function clampNum(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function positionTutPanel(targetEl) {
+    const PANEL_W = 320;
+    const PANEL_H = 230;   // conservative height estimate
+    const GAP     = 14;
+    const MARGIN  = 14;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (!targetEl) {
+        Object.assign(tutPanel.style, { top: 'auto', left: 'auto', bottom: '20px', right: '20px' });
+        delete tutPanel.dataset.arrow;
+        return;
+    }
+    const r = targetEl.getBoundingClientRect();
+    // Large element (canvas, full-width bar…): corner placement, no arrow
+    if (r.width > vw * 0.4 || r.height > vh * 0.4) {
+        Object.assign(tutPanel.style, { top: 'auto', left: 'auto', bottom: '20px', right: '20px' });
+        delete tutPanel.dataset.arrow;
+        return;
+    }
+    let top, left, arrow;
+    // Try below
+    if (r.bottom + GAP + PANEL_H < vh - MARGIN) {
+        top   = r.bottom + GAP;
+        left  = clampNum(r.left + r.width / 2 - PANEL_W / 2, MARGIN, vw - PANEL_W - MARGIN);
+        arrow = 'top';
+    // Try above
+    } else if (r.top - GAP - PANEL_H > MARGIN) {
+        top   = r.top - GAP - PANEL_H;
+        left  = clampNum(r.left + r.width / 2 - PANEL_W / 2, MARGIN, vw - PANEL_W - MARGIN);
+        arrow = 'bottom';
+    // Try right
+    } else if (r.right + GAP + PANEL_W < vw - MARGIN) {
+        left  = r.right + GAP;
+        top   = clampNum(r.top + r.height / 2 - PANEL_H / 2, MARGIN, vh - PANEL_H - MARGIN);
+        arrow = 'left';
+    // Fallback: left of target
+    } else {
+        left  = Math.max(MARGIN, r.left - GAP - PANEL_W);
+        top   = clampNum(r.top + r.height / 2 - PANEL_H / 2, MARGIN, vh - PANEL_H - MARGIN);
+        arrow = 'right';
+    }
+    Object.assign(tutPanel.style, { top: top + 'px', left: left + 'px', bottom: 'auto', right: 'auto' });
+    tutPanel.dataset.arrow = arrow;
+}
+
 function renderTutStep() {
     const s = TUTORIAL_STEPS[tutStep];
     tutIndicator.textContent = `${tutStep + 1} / ${TUTORIAL_STEPS.length}`;
@@ -336,9 +378,13 @@ function renderTutStep() {
     tutPrevBtn.disabled      = (tutStep === 0);
     tutNextBtn.textContent   = tutStep === TUTORIAL_STEPS.length - 1 ? '✓ Done' : 'Next →';
     clearTutHighlight();
+    delete tutPanel.dataset.arrow;
     if (s.sel) {
         const el = document.querySelector(s.sel);
-        if (el) { el.classList.add('tutorial-highlight'); tutHighlightEl = el; }
+        if (el) { el.classList.add('tutorial-highlight'); tutHighlightEl = el; positionTutPanel(el); }
+        else     { positionTutPanel(null); }
+    } else {
+        positionTutPanel(null);
     }
 }
 
@@ -355,6 +401,8 @@ function closeTutorial() {
     tutPanel.classList.remove('open');
     tutToggleBtn.classList.remove('active');
     clearTutHighlight();
+    Object.assign(tutPanel.style, { top: 'auto', left: 'auto', bottom: '20px', right: '20px' });
+    delete tutPanel.dataset.arrow;
 }
 
 tutToggleBtn.addEventListener('click', () => { if (tutOpen) closeTutorial(); else openTutorial(); });
