@@ -515,15 +515,15 @@ EMSCRIPTEN_KEEPALIVE int GetNumUniqueAgents(void){
     return count;
 }
 
-// Tutorial network: 4 agents (1 leader + 3 anonymous), 3 dynamic rounds
-// Round 1: path  L-1-2-3
-// Round 2: L connects to 3 and 1; 1-2 remain
-// Round 3: L-2, L-1, 1-3
+// Tutorial network: 6 agents (1 leader + 5 anonymous), 5 dynamic rounds
+// Arranged as a hexagonal ring; rounds 1-4 break symmetry so the
+// stabilizing algorithm converges to n = 6.
 EMSCRIPTEN_KEEPALIVE void TutorialLoadNetwork(void){
     drawingEdge=draggingEntity=false;
     selectedEntity=selectedNodeI=selectedNodeJ=-1;
     selectedNode=NULL;
     currentRound=-1;
+    numSteps=-1;
     DoneNetwork();
     network=malloc(sizeof(Network));
     network->entities=NewVector(8);
@@ -581,6 +581,11 @@ EMSCRIPTEN_KEEPALIVE void TutorialLoadNetwork(void){
     currentRound=0;
     ExecuteNetwork();
     win1->invalid=true;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetRootGuess(void){
+    if(!aux || aux->tot==0)return -1;
+    return GetAuxData(0,0)->guess;
 }
 
 EMSCRIPTEN_KEEPALIVE int GetSelectedEntity(void){

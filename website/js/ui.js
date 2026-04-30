@@ -263,7 +263,7 @@ setInterval(updateNetStats, 400);
 const TUTORIAL_STEPS = [
     {
         title: 'Welcome',
-        text:  'This short tour introduces the key ideas behind anonymous dynamic networks. Use Next / Prev to navigate, or close the panel at any time. Experienced users can toggle this panel off with the 🎓 Tutorial button.',
+        text:  'This short tour introduces the key ideas behind anonymous dynamic networks. Use Next / Prev to navigate, or close the panel at any time. Click the Tour button in the toolbar to toggle this panel.',
         sel:   null,
     },
     {
@@ -283,7 +283,7 @@ const TUTORIAL_STEPS = [
     },
     {
         title: 'Step 4 — Loading a Network',
-        text:  'Click 📂 Load to open an example from the networks/ folder. DefaultNetwork2.txt is a good starting point; BoldiVigna.txt is a classic from the research literature.',
+        text:  'Click the Load button to open an example from the networks/ folder. DefaultNetwork2.txt is a good starting point; BoldiVigna.txt is a classic from the research literature.',
         sel:   '#btn-load',
     },
     {
@@ -303,7 +303,7 @@ const TUTORIAL_STEPS = [
     },
     {
         title: 'All Done!',
-        text:  "You're ready to explore! Check 📖 Glossary for key term definitions and ? Help for all keyboard shortcuts. Try loading different networks and comparing how the two algorithms behave.",
+        text:  "You're ready to explore! Open the Glossary for key term definitions and Help for all keyboard shortcuts. Try loading different networks and comparing how the two algorithms behave.",
         sel:   null,
     },
 ];
@@ -378,7 +378,7 @@ let guidedStepFired = false;  // set to true when user presses Step/Space
 const GUIDED_STEPS = [
     {
         title: 'Welcome — Let\'s Count!',
-        body:  'We\'ve loaded a small example network: 4 agents across 3 rounds. Your goal is to understand how the counting algorithm works — all without knowing any agent\'s identity.',
+        body:  'We\'ve loaded a small example network: 6 agents across 5 rounds. Your goal is to understand how the counting algorithm works — all without knowing any agent\'s identity.',
         action: null,
         trigger: null,
     },
@@ -435,7 +435,6 @@ const GUIDED_STEPS = [
         body:  'Press ▶ Step in the toolbar (or Space). The algorithm will look for exposed pairs — agents that mutually observed each other — and start assigning anonymity estimates.',
         action: 'Press ▶ Step or Space',
         trigger: () => guidedStepFired,
-        waitForStep: true,
     },
     {
         title: 'Colors Changed!',
@@ -445,16 +444,16 @@ const GUIDED_STEPS = [
     },
     {
         title: 'Keep Stepping Until Done',
-        body:  'Press ▶ Step several more times. The algorithm propagates from L to its neighbours and beyond. Watch the Network Stats panel (bottom-left) — "Uniquely identified" increases as agents are counted.',
-        action: 'Keep pressing ▶ Step until all nodes are green',
-        trigger: () => typeof Module._GetNumUniqueAgents === 'function' &&
-                       typeof Module._GetNumAgents      === 'function' &&
+        body:  'Press ▶ Step several more times. Watch the root node of the History Tree — when it turns green and shows "6", the algorithm has stabilized and correctly determined n = 6!',
+        action: 'Keep pressing ▶ Step until the root node shows 6 and turns green',
+        trigger: () => typeof Module._GetRootGuess === 'function' &&
+                       typeof Module._GetNumAgents === 'function' &&
                        Module._GetNumAgents() > 0 &&
-                       Module._GetNumUniqueAgents() >= Module._GetNumAgents(),
+                       Module._GetRootGuess() === Module._GetNumAgents(),
     },
     {
         title: '🎉 n = 6 Counted Successfully!',
-        body:  'All 6 agents are uniquely identified — the stabilizing algorithm determined n = 6! Now try: load a bigger network with 📂 Load, switch to the Terminating algorithm, or check 📖 Glossary for more concepts.',
+        body:  'The root node shows 6 — the stabilizing algorithm has correctly determined n = 6! The green nodes show the equivalence classes it counted. Now try: load a bigger network, switch to the Terminating algorithm, or open the Glossary for more concepts.',
         action: null,
         trigger: null,
     },

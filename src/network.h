@@ -47,6 +47,7 @@ int GetCurrentRound(void);
 int GetCurrentRoundLinks(void);
 int GetNumAnonymityClasses(void);
 int GetNumUniqueAgents(void);
+int GetRootGuess(void);
 void TutorialLoadNetwork(void);
 int GetSelectedEntity(void);
 #endif
