@@ -50,10 +50,10 @@
 
     <!-- Options & Help -->
     <button class="tb-btn" id="btn-options"  tabindex="-1" data-tip="Display options"><i data-lucide="settings-2"></i> Options</button>
-    <button class="tb-btn" id="btn-glossary" tabindex="-1" data-tip="Concept glossary"><i data-lucide="book-open"></i> Glossary</button>
-    <button class="tb-btn" id="btn-tutorial" tabindex="-1" data-tip="UI overview tour"><i data-lucide="map"></i> Tour</button>
-    <button class="tb-btn" id="btn-learn"    tabindex="-1" data-tip="Interactive guided tutorial"><i data-lucide="graduation-cap"></i> Learn</button>
-    <button class="tb-btn" id="btn-help"     tabindex="-1" data-tip="Keyboard reference  H"><i data-lucide="help-circle"></i> Help</button>
+    <button class="tb-btn student-only" id="btn-glossary" tabindex="-1" data-tip="Concept glossary"><i data-lucide="book-open"></i> Glossary</button>
+    <button class="tb-btn student-only" id="btn-tutorial" tabindex="-1" data-tip="UI overview tour"><i data-lucide="map"></i> Tour</button>
+    <button class="tb-btn student-only" id="btn-learn"    tabindex="-1" data-tip="Interactive guided tutorial"><i data-lucide="graduation-cap"></i> Learn</button>
+    <button class="tb-btn student-only" id="btn-help"     tabindex="-1" data-tip="Keyboard reference  H"><i data-lucide="help-circle"></i> Help</button>
 
 </div>
 
@@ -88,6 +88,11 @@
     <div class="opt-row" id="opt-caps">
         <span class="opt-label">Two-way links by default (Caps Lock)</span>
         <span class="opt-key">⇪</span>
+    </div>
+    <div class="opt-sep"></div>
+    <div class="opt-row" id="opt-student-mode">
+        <span class="opt-label">Student mode</span>
+        <span class="opt-toggle" id="opt-student-toggle"></span>
     </div>
 </div>
 

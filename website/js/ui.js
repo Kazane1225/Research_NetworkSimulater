@@ -182,6 +182,22 @@ document.getElementById('opt-caps')       .addEventListener('click', () => {
     pressKey('CapsLock', 'CapsLock');
 });
 
+// ── Professor / Student mode ──────────────────────────────
+const studentToggle = document.getElementById('opt-student-toggle');
+
+function setStudentMode(enabled) {
+    document.body.classList.toggle('student-mode', enabled);
+    studentToggle.classList.toggle('on', enabled);
+    localStorage.setItem('studentMode', enabled ? '1' : '0');
+}
+
+// Restore saved mode (default: professor = off)
+setStudentMode(localStorage.getItem('studentMode') === '1');
+
+document.getElementById('opt-student-mode').addEventListener('click', () => {
+    setStudentMode(!document.body.classList.contains('student-mode'));
+});
+
 // ── Help modal ────────────────────────────────────────────────
 const helpModal = document.getElementById('help-modal');
 
