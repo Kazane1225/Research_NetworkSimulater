@@ -15,7 +15,7 @@
 <div id="toolbar">
 
     <!-- Round navigation -->
-    <span class="tb-label">Round</span>
+    <span class="tb-label" data-i18n="tbRound">Round</span>
     <button class="tb-btn icon-only" id="btn-prev-round" tabindex="-1" data-tip="Previous round  ↑"><i data-lucide="chevron-up"></i></button>
     <button class="tb-btn icon-only" id="btn-next-round" tabindex="-1" data-tip="Next round  ↓"><i data-lucide="chevron-down"></i></button>
     <button class="tb-btn icon-only" id="btn-add-round"  tabindex="-1" data-tip="Insert round  +"><i data-lucide="plus"></i></button>
@@ -25,73 +25,76 @@
     <div class="tb-sep"></div>
 
     <!-- Algorithm selector -->
-    <span class="tb-label">Algorithm</span>
+    <span class="tb-label" data-i18n="tbAlgorithm">Algorithm</span>
     <div class="algo-group">
-        <button class="tb-btn active" id="algo-none" tabindex="-1" data-tip="No algorithm">None</button>
-        <button class="tb-btn"        id="algo-stab" tabindex="-1" data-tip="Stabilizing counting">Stabilizing</button>
-        <button class="tb-btn"        id="algo-term" tabindex="-1" data-tip="Terminating counting">Terminating</button>
+        <button class="tb-btn active" id="algo-none" tabindex="-1" data-tip="No algorithm" data-i18n="btnNone">None</button>
+        <button class="tb-btn"        id="algo-stab" tabindex="-1" data-tip="Stabilizing counting" data-i18n="btnStabilizing">Stabilizing</button>
+        <button class="tb-btn"        id="algo-term" tabindex="-1" data-tip="Terminating counting" data-i18n="btnTerminating">Terminating</button>
     </div>
-    <button class="tb-btn" id="btn-step" tabindex="-1" data-tip="Execute one algorithm step  Space" disabled><i data-lucide="play"></i> Step</button>
+    <button class="tb-btn" id="btn-step" tabindex="-1" data-tip="Execute one algorithm step  Space" disabled><i data-lucide="play"></i> <span data-i18n="btnStep">Step</span></button>
 
     <div class="tb-sep"></div>
 
     <!-- Network editing -->
-    <span class="tb-label">Edit</span>
-    <button class="tb-btn" id="btn-delete-agent" tabindex="-1" data-tip="Delete selected agent  Del"><i data-lucide="user-x"></i> Agent</button>
-    <button class="tb-btn" id="btn-deselect"     tabindex="-1" data-tip="Deselect / cancel  Esc"><i data-lucide="x-circle"></i> Deselect</button>
+    <span class="tb-label" data-i18n="tbEdit">Edit</span>
+    <button class="tb-btn" id="btn-delete-agent" tabindex="-1" data-tip="Delete selected agent  Del"><i data-lucide="user-x"></i> <span data-i18n="btnAgent">Agent</span></button>
+    <button class="tb-btn" id="btn-deselect"     tabindex="-1" data-tip="Deselect / cancel  Esc"><i data-lucide="x-circle"></i> <span data-i18n="btnDeselect">Deselect</span></button>
 
     <div class="tb-sep"></div>
 
     <!-- File -->
-    <button class="tb-btn" id="btn-load" tabindex="-1" data-tip="Load network from file  L"><i data-lucide="folder-open"></i> Load</button>
-    <button class="tb-btn" id="btn-save" tabindex="-1" data-tip="Save network to file  S"><i data-lucide="save"></i> Save</button>
+    <button class="tb-btn" id="btn-load" tabindex="-1" data-tip="Load network from file  L"><i data-lucide="folder-open"></i> <span data-i18n="btnLoad">Load</span></button>
+    <button class="tb-btn" id="btn-save" tabindex="-1" data-tip="Save network to file  S"><i data-lucide="save"></i> <span data-i18n="btnSave">Save</span></button>
 
     <div class="tb-sep"></div>
 
     <!-- Options & Help -->
-    <button class="tb-btn" id="btn-options"  tabindex="-1" data-tip="Display options"><i data-lucide="settings-2"></i> Options</button>
-    <button class="tb-btn student-only" id="btn-glossary" tabindex="-1" data-tip="Concept glossary"><i data-lucide="book-open"></i> Glossary</button>
-    <button class="tb-btn student-only" id="btn-tutorial" tabindex="-1" data-tip="UI overview tour"><i data-lucide="map"></i> Tour</button>
-    <button class="tb-btn student-only" id="btn-learn"    tabindex="-1" data-tip="Interactive guided tutorial"><i data-lucide="graduation-cap"></i> Learn</button>
-    <button class="tb-btn student-only" id="btn-help"     tabindex="-1" data-tip="Keyboard reference  H"><i data-lucide="help-circle"></i> Help</button>
+    <button class="tb-btn" id="btn-options"  tabindex="-1" data-tip="Display options"><i data-lucide="settings-2"></i> <span data-i18n="btnOptions">Options</span></button>
+    <button class="tb-btn student-only" id="btn-glossary" tabindex="-1" data-tip="Concept glossary"><i data-lucide="book-open"></i> <span data-i18n="btnGlossary">Glossary</span></button>
+    <button class="tb-btn student-only" id="btn-tutorial" tabindex="-1" data-tip="UI overview tour"><i data-lucide="map"></i> <span data-i18n="btnTour">Tour</span></button>
+    <button class="tb-btn student-only" id="btn-learn"    tabindex="-1" data-tip="Interactive guided tutorial"><i data-lucide="graduation-cap"></i> <span data-i18n="btnLearn">Learn</span></button>
+    <button class="tb-btn student-only" id="btn-help"     tabindex="-1" data-tip="Keyboard reference  H"><i data-lucide="help-circle"></i> <span data-i18n="btnHelp">Help</span></button>
+
+    <div class="tb-sep"></div>
+    <button class="tb-btn" id="btn-lang" tabindex="-1" data-tip="Switch language / 言語切替">EN</button>
 
 </div>
 
 <!-- ── Options popover ────────────────────────────────────────────── -->
 <div id="options-panel">
     <div class="opt-row" id="opt-outdegree">
-        <span class="opt-label">Toggle outdegree awareness</span>
+        <span class="opt-label" data-i18n="optOutdegree">Toggle outdegree awareness</span>
         <span class="opt-key">O</span>
     </div>
     <div class="opt-row" id="opt-arrows">
-        <span class="opt-label">Toggle arrowheads</span>
+        <span class="opt-label" data-i18n="optArrows">Toggle arrowheads</span>
         <span class="opt-key">A</span>
     </div>
     <div class="opt-sep"></div>
     <div class="opt-row" id="opt-round-nodes">
-        <span class="opt-label">Toggle round / square nodes</span>
+        <span class="opt-label" data-i18n="optRoundNodes">Toggle round / square nodes</span>
         <span class="opt-key">B</span>
     </div>
     <div class="opt-row" id="opt-highlight">
-        <span class="opt-label">Toggle current-level highlight</span>
+        <span class="opt-label" data-i18n="optHighlight">Toggle current-level highlight</span>
         <span class="opt-key">C</span>
     </div>
     <div class="opt-row" id="opt-red-edge">
-        <span class="opt-label">Cycle red-edge draw mode</span>
+        <span class="opt-label" data-i18n="optRedEdge">Cycle red-edge draw mode</span>
         <span class="opt-key">D</span>
     </div>
     <div class="opt-sep"></div>
     <div class="opt-row" id="opt-grid">
-        <span class="opt-label">Snap agents to grid</span>
+        <span class="opt-label" data-i18n="optGrid">Snap agents to grid</span>
         <span class="opt-key">G</span>
     </div>
     <div class="opt-row" id="opt-caps">
-        <span class="opt-label">Two-way links by default (Caps Lock)</span>
+        <span class="opt-label" data-i18n="optCaps">Two-way links by default (Caps Lock)</span>
         <span class="opt-key">⇪</span>
     </div>
     <div class="opt-sep"></div>
     <div class="opt-row" id="opt-student-mode">
-        <span class="opt-label">Student mode</span>
+        <span class="opt-label" data-i18n="optStudentMode">Student mode</span>
         <span class="opt-toggle" id="opt-student-toggle"></span>
     </div>
 </div>
@@ -105,11 +108,11 @@
         </div>
         <div id="algo-banner-right">
             <div class="algo-stat">
-                <span class="algo-stat-label">Uniquely identified</span>
-                <span class="algo-stat-val"><span id="ab-unique">0</span> / <span id="ab-agents">?</span> agents</span>
+                <span class="algo-stat-label" data-i18n="bannerUniq">Uniquely identified</span>
+                <span class="algo-stat-val"><span id="ab-unique">0</span> / <span id="ab-agents">?</span> <span data-i18n="bannerAgents">agents</span></span>
             </div>
             <div class="algo-stat">
-                <span class="algo-stat-label">Anonymity classes</span>
+                <span class="algo-stat-label" data-i18n="bannerClasses">Anonymity classes</span>
                 <span class="algo-stat-val" id="ab-classes">—</span>
             </div>
             <div class="algo-stat">
@@ -118,35 +121,35 @@
             </div>
         </div>
     </div>
-    <div id="algo-banner-hint">Select an agent or history-tree node, then press <kbd>Space</kbd> (or <strong>▶ Step</strong>) to execute one step.</div>
+    <div id="algo-banner-hint" data-i18n-html="bannerHint">Select an agent or history-tree node, then press <kbd>Space</kbd> (or <strong>▶ Step</strong>) to execute one step.</div>
 </div>
 
 <!-- ── Canvas wrapper ─────────────────────────────────────────────── -->
 <div id="canvas-wrap">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-    <span class="panel-label" id="label-network">Network</span>
-    <span class="panel-label" id="label-history">History Tree</span>
+    <span class="panel-label" id="label-network" data-i18n="labelNetwork">Network</span>
+    <span class="panel-label" id="label-history" data-i18n="labelHistory">History Tree</span>
 
     <!-- ── Node-colour legend (History Tree panel, bottom-right) ── -->
     <div id="node-legend">
-        <div class="legend-title">Node colours</div>
-        <div class="legend-item" id="leg-yellow"><span class="leg-dot" style="background:#ffff00"></span>Not yet guessed</div>
-        <div class="legend-item" id="leg-green" ><span class="leg-dot" style="background:#80ff80"></span>Correctly guessed / counted</div>
-        <div class="legend-item leg-stab"        ><span class="leg-dot" style="background:#ff8080"></span>Incorrectly guessed <span class="leg-tag">(Stabilizing)</span></div>
-        <div class="legend-item leg-term"        ><span class="leg-dot" style="background:#00cfcf"></span>Initial-level guess <span class="leg-tag">(Terminating)</span></div>
-        <div class="legend-item leg-term"        ><span class="leg-dot" style="background:#ffc040"></span>Intermediate guess <span class="leg-tag">(Terminating)</span></div>
+        <div class="legend-title" data-i18n="legendTitle">Node colours</div>
+        <div class="legend-item" id="leg-yellow"><span class="leg-dot" style="background:#ffff00"></span><span data-i18n="legYellow">Not yet guessed</span></div>
+        <div class="legend-item" id="leg-green" ><span class="leg-dot" style="background:#80ff80"></span><span data-i18n="legGreen">Correctly guessed / counted</span></div>
+        <div class="legend-item leg-stab"        ><span class="leg-dot" style="background:#ff8080"></span><span data-i18n="legStabRed">Incorrectly guessed</span> <span class="leg-tag" data-i18n="legTagStab">(Stabilizing)</span></div>
+        <div class="legend-item leg-term"        ><span class="leg-dot" style="background:#00cfcf"></span><span data-i18n="legTermCyan">Initial-level guess</span> <span class="leg-tag" data-i18n="legTagTerm">(Terminating)</span></div>
+        <div class="legend-item leg-term"        ><span class="leg-dot" style="background:#ffc040"></span><span data-i18n="legTermOrange">Intermediate guess</span> <span class="leg-tag" data-i18n="legTagTerm">(Terminating)</span></div>
     </div>
 
     <!-- ── Network stats panel (Network panel, bottom-left) ── -->
     <div id="net-stats">
-        <div class="stats-title">Network Stats</div>
+        <div class="stats-title" data-i18n="statsTitle">Network Stats</div>
         <div class="stats-grid">
-            <span class="stats-label">Agents <em>(n)</em></span>         <span class="stats-val" id="stat-agents">—</span>
-            <span class="stats-label">Leaders</span>                      <span class="stats-val" id="stat-leaders">—</span>
-            <span class="stats-label">Rounds <em>(T)</em></span>          <span class="stats-val" id="stat-rounds">—</span>
-            <span class="stats-label">Links (this round)</span>           <span class="stats-val" id="stat-links">—</span>
-            <span class="stats-label">Anonymity classes</span>            <span class="stats-val" id="stat-classes">—</span>
-            <span class="stats-label">Uniquely identified</span>          <span class="stats-val" id="stat-unique">—</span>
+            <span class="stats-label"><span data-i18n="statsAgents">Agents</span> <em>(n)</em></span>  <span class="stats-val" id="stat-agents">—</span>
+            <span class="stats-label" data-i18n="statsLeaders">Leaders</span>                           <span class="stats-val" id="stat-leaders">—</span>
+            <span class="stats-label"><span data-i18n="statsRounds">Rounds</span> <em>(T)</em></span>   <span class="stats-val" id="stat-rounds">—</span>
+            <span class="stats-label" data-i18n="statsLinks">Links (this round)</span>                 <span class="stats-val" id="stat-links">—</span>
+            <span class="stats-label" data-i18n="statsClasses">Anonymity classes</span>               <span class="stats-val" id="stat-classes">—</span>
+            <span class="stats-label" data-i18n="statsUnique">Uniquely identified</span>              <span class="stats-val" id="stat-unique">—</span>
         </div>
     </div>
 </div>
@@ -155,11 +158,10 @@
 <div id="help-modal">
     <div id="help-box">
         <div id="help-header">
-            <h2>Anonymous Dynamic Networks — Controls</h2>
-            <button id="help-close">✕ Close</button>
+            <h2 data-i18n="helpTitle">Anonymous Dynamic Networks — Controls</h2>
+            <button id="help-close" data-i18n="helpClose">✕ Close</button>
         </div>
-
-        <h3>Mouse — Network Panel</h3>
+        <div id="help-content" data-i18n-html="helpContent">
         <table>
             <tr><td>Left-click + drag on agent</td><td>Draw a new directed link from that agent</td></tr>
             <tr><td>Right-click + drag on agent</td><td>Move the agent</td></tr>
@@ -221,6 +223,7 @@
         <div id="help-ref">
             Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a>
         </div>
+        </div><!-- #help-content -->
     </div>
 </div>
 
@@ -228,11 +231,10 @@
 <div id="glossary-modal">
     <div id="glossary-box">
         <div id="glossary-header">
-            <h2>Anonymous Dynamic Networks — Glossary</h2>
-            <button id="glossary-close">✕ Close</button>
+            <h2 data-i18n="glossaryTitle">Anonymous Dynamic Networks — Glossary</h2>
+            <button id="glossary-close" data-i18n="glossaryClose">✕ Close</button>
         </div>
-
-        <div class="gl-entry">
+        <div id="glossary-content" data-i18n-html="glossaryContent">
             <div class="gl-term">Agent</div>
             <div class="gl-def">A computing entity in the network. Agents have no unique identifiers — they are <em>anonymous</em>. Each agent starts with an integer <em>input</em> value (0 = leader).</div>
         </div>
@@ -295,6 +297,7 @@
         <div id="glossary-ref">
             Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a>
         </div>
+        </div><!-- #glossary-content -->
     </div>
 </div>
 
@@ -307,7 +310,7 @@
     <div id="tutorial-title"></div>
     <div id="tutorial-body"></div>
     <div id="tutorial-footer">
-        <button class="tut-btn" id="tutorial-prev">← Prev</button>
+        <button class="tut-btn" id="tutorial-prev" data-i18n="tutPrev">← Prev</button>
         <button class="tut-btn tut-primary" id="tutorial-next">Next →</button>
     </div>
 </div>
@@ -315,13 +318,13 @@
 <!-- ── Guided tutorial panel ────────────────────────────────── -->
 <div id="guided-panel">
     <div id="guided-header">
-        <div id="guided-badge">🎓 Learn</div>
+        <div id="guided-badge" data-i18n="guidedBadge">🎓 Learn</div>
         <span id="guided-indicator"></span>
         <button id="guided-close" aria-label="Close">✕</button>
     </div>
     <div id="guided-tabs">
-        <button class="guided-tab active" data-scenario="0">Stabilizing</button>
-        <button class="guided-tab"        data-scenario="1">Terminating</button>
+        <button class="guided-tab active" data-scenario="0" data-i18n="btnStabilizing">Stabilizing</button>
+        <button class="guided-tab"        data-scenario="1" data-i18n="btnTerminating">Terminating</button>
     </div>
     <div id="guided-title"></div>
     <div id="guided-body"></div>
@@ -331,7 +334,7 @@
     </div>
     <div id="step-commentary" style="display:none"></div>
     <div id="guided-footer">
-        <button class="tut-btn" id="guided-skip">Skip →→</button>
+        <button class="tut-btn" id="guided-skip" data-i18n="guidedSkip">Skip →→</button>
         <button class="tut-btn tut-primary" id="guided-next" style="display:none">Next →</button>
     </div>
 </div>
@@ -340,6 +343,9 @@
 <div id="step-toast"></div>
 
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="js/locales/en.js"></script>
+<script src="js/locales/ja.js"></script>
+<script src="js/i18n.js"></script>
 <script src="js/ui.js"></script>
 <script src="index.js"></script>
 </body>

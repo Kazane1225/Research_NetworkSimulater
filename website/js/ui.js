@@ -74,28 +74,14 @@ const algoBannerTitle = document.getElementById('algo-banner-title');
 const algoBannerDesc  = document.getElementById('algo-banner-desc');
 const abBoundLabel    = document.getElementById('ab-bound-label');
 
-const ALGO_INFO = [
-    null, // 0 = None
-    {
-        title: 'Stabilizing Counting Algorithm',
-        desc:  'Agents broadcast their history trees each round. The algorithm finds ‘exposed pairs’ — two agents that observed each other — and propagates anonymity estimates from the leader outward. It may output wrong guesses at first, but is guaranteed to stabilise on the correct count n by round 2n − 2.',
-        boundLabel: 'Stabilizes by round',
-        bound: n => n > 0 ? `2n − 2 = ${2 * n - 2}` : '—',
-    },
-    {
-        title: 'Terminating Counting Algorithm',
-        desc:  'A stronger variant: the algorithm explicitly halts and signals “done” when it is certain the count is correct. It builds complete ‘isles’ of counted agents before announcing the result, so no incorrect output is ever committed to.',
-        boundLabel: 'Terminates by round',
-        bound: n => n > 0 ? `3n − 3 = ${3 * n - 3}` : '—',
-    },
-];
+// ALGO_INFO moved to i18n.js → getLocale().algoInfo
 
 function syncBanner() {
     if (algoState === 0) {
         algoBanner.classList.remove('visible');
         return;
     }
-    const info = ALGO_INFO[algoState];
+    const info = getLocale().algoInfo[algoState];
     algoBannerTitle.textContent = info.title;
     algoBannerDesc .textContent = info.desc;
     abBoundLabel   .textContent = info.boundLabel;
@@ -265,11 +251,11 @@ function updateNetStats() {
     statUnique .textContent = n > 0 ? unique  : '—';
 
     // Update banner live stats
-    if (algoState !== 0 && ALGO_INFO[algoState]) {
+    if (algoState !== 0 && getLocale().algoInfo[algoState]) {
         document.getElementById('ab-agents') .textContent = n > 0 ? n : '?';
         document.getElementById('ab-unique') .textContent = unique;
         document.getElementById('ab-classes').textContent = classes > 0 ? classes : '—';
-        document.getElementById('ab-bound')  .textContent = ALGO_INFO[algoState].bound(n);
+        document.getElementById('ab-bound')  .textContent = getLocale().algoInfo[algoState].bound(n);
     }
 }
 
@@ -387,12 +373,14 @@ function positionTutPanel(targetEl) {
 }
 
 function renderTutStep() {
-    const s = TUTORIAL_STEPS[tutStep];
-    tutIndicator.textContent = `${tutStep + 1} / ${TUTORIAL_STEPS.length}`;
+    const steps = getLocale().tutorial;
+    const s     = steps[tutStep];
+    tutIndicator.textContent = `${tutStep + 1} / ${steps.length}`;
     tutTitleEl.textContent   = s.title;
     tutBodyEl.textContent    = s.text;
     tutPrevBtn.disabled      = (tutStep === 0);
-    tutNextBtn.textContent   = tutStep === TUTORIAL_STEPS.length - 1 ? '✓ Done' : 'Next →';
+    const _tu = getLocale().ui;
+    tutNextBtn.textContent   = tutStep === steps.length - 1 ? _tu.tutDone : _tu.tutNext;
     clearTutHighlight();
     delete tutPanel.dataset.arrow;
     if (s.sel) {
@@ -425,7 +413,7 @@ tutToggleBtn.addEventListener('click', () => { if (tutOpen) closeTutorial(); els
 tutCloseBtn .addEventListener('click', closeTutorial);
 tutPrevBtn  .addEventListener('click', () => { if (tutStep > 0) { tutStep--; renderTutStep(); } });
 tutNextBtn  .addEventListener('click', () => {
-    if (tutStep < TUTORIAL_STEPS.length - 1) { tutStep++; renderTutStep(); }
+    if (tutStep < getLocale().tutorial.length - 1) { tutStep++; renderTutStep(); }
     else closeTutorial();
 });
 
@@ -440,6 +428,54 @@ window.addEventListener('keydown', e => {
 //   highlight – CSS selector of the toolbar element to pulse-highlight
 let guidedStepFired = false;  // set to true when user presses Step/Space
 
+// Trigger functions (locale-independent; reference ui.js state variables).
+// Indices correspond to guidedStab / guidedTerm arrays in i18n.js.
+const STAB_TRIGGERS = [
+    null,   // Welcome
+    null,   // Agents are Anonymous
+    null,   // Round 1: A Ring
+    () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 1,
+    null,   // The Network is Dynamic!
+    () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 2,
+    null,   // Five Dynamic Rounds
+    () => algoState === 1,
+    () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
+    () => guidedStepFired,
+    null,   // Colors Changed!
+    () => typeof Module._GetRootGuess === 'function' &&
+          typeof Module._GetNumAgents === 'function' &&
+          Module._GetNumAgents() > 0 &&
+          Module._GetRootGuess() === Module._GetNumAgents(),
+    null,   // Done
+];
+
+const TERM_TRIGGERS = [
+    null,   // Terminating — Stronger Guarantee
+    () => algoState === 2,
+    () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
+    () => guidedStepFired,
+    null,   // Building Isles
+    () => typeof Module._GetRootGuess === 'function' &&
+          typeof Module._GetNumAgents === 'function' &&
+          Module._GetNumAgents() > 0 &&
+          Module._GetRootGuess() === Module._GetNumAgents(),
+    null,   // Done
+];
+
+function buildGuidedSteps(localeSteps, triggers) {
+    return localeSteps.map((s, i) => Object.assign({}, s, { trigger: triggers[i] || null }));
+}
+
+function getScenarios() {
+    const L = getLocale();
+    return [
+        { name: 'Stabilizing', steps: buildGuidedSteps(L.guidedStab, STAB_TRIGGERS) },
+        { name: 'Terminating', steps: buildGuidedSteps(L.guidedTerm, TERM_TRIGGERS) },
+    ];
+}
+
+// Legacy step arrays kept for reference — text is now served from i18n.js.
+// DO NOT USE directly; access steps via getScenarios() instead.
 const GUIDED_STEPS_STAB = [
     {
         title: 'Welcome — Let\'s Count!',
@@ -572,11 +608,6 @@ const GUIDED_STEPS_TERM = [
     },
 ];
 
-const SCENARIOS = [
-    { name: 'Stabilizing', steps: GUIDED_STEPS_STAB },
-    { name: 'Terminating', steps: GUIDED_STEPS_TERM },
-];
-
 let guidedStep     = 0;
 let guidedScenario = 0;
 let guidedOpen     = false;
@@ -611,7 +642,7 @@ function applyGuidedHighlight(sel) {
 }
 
 function renderGuidedStep() {
-    const steps  = SCENARIOS[guidedScenario].steps;
+    const steps  = getScenarios()[guidedScenario].steps;
     const s      = steps[guidedStep];
     const isLast = guidedStep === steps.length - 1;
 
@@ -632,7 +663,7 @@ function renderGuidedStep() {
     } else {
         guidedSkipBtn.style.display = 'none';
         guidedNextBtn.style.display = '';
-        guidedNextBtn.textContent   = isLast ? '✓ Done' : 'Next →';
+        guidedNextBtn.textContent   = isLast ? getLocale().ui.guidedDone : getLocale().ui.guidedNext;
     }
 
     stepCommentaryEl.style.display = 'none';
@@ -641,7 +672,7 @@ function renderGuidedStep() {
 
 function advanceGuided() {
     guidedStepFired = false;
-    const steps = SCENARIOS[guidedScenario].steps;
+    const steps = getScenarios()[guidedScenario].steps;
     if (guidedStep < steps.length - 1) {
         guidedStep++;
         renderGuidedStep();
@@ -654,14 +685,14 @@ function startGuidedPoll() {
     if (guidedPollTimer) return;
     guidedPollTimer = setInterval(() => {
         if (!guidedOpen) { clearInterval(guidedPollTimer); guidedPollTimer = null; return; }
-        const s = SCENARIOS[guidedScenario].steps[guidedStep];
+        const s = getScenarios()[guidedScenario].steps[guidedStep];
         if (s.trigger && s.trigger()) advanceGuided();
     }, 300);
 }
 
 function openGuided() {
     if (typeof Module._TutorialLoadNetwork !== 'function') {
-        alert('WASM not yet ready — please wait a moment and try again.');
+        alert(getLocale().ui.wasmNotReady);
         return;
     }
     if (tutOpen) closeTutorial();
@@ -735,20 +766,20 @@ function captureModuleState() {
 
 function buildCommentaryText(before, after) {
     if (!before || !after) return null;
+    const C     = getLocale().commentary;
     const parts = [];
-    const du = after.unique - before.unique;
+    const du    = after.unique - before.unique;
     if (du > 0) {
-        parts.push(`+${du} agent${du > 1 ? 's' : ''} uniquely identified  (${after.unique} / ${after.n})`);
+        parts.push(C.uniqueIdentified(du, after.unique, after.n));
     }
     if (after.classes !== before.classes && before.classes > 0) {
-        parts.push(`Anonymity classes: ${before.classes} → ${after.classes}`);
+        parts.push(C.classesChanged(before.classes, after.classes));
     }
     if (after.rootGuess !== before.rootGuess && after.rootGuess > 0) {
         const was = before.rootGuess > 0 ? before.rootGuess : '?';
-        const tag = after.rootGuess === after.n ? '  ✓ correct!' : '';
-        parts.push(`Root guess: ${was} → ${after.rootGuess}${tag}`);
+        parts.push(C.rootGuessChanged(was, after.rootGuess, after.rootGuess === after.n));
     }
-    if (parts.length === 0) return 'No observable change — try selecting a different agent.';
+    if (parts.length === 0) return C.noChange;
     return parts.join('\n');
 }
 
@@ -791,3 +822,39 @@ window.addEventListener('keydown', e => {
     if (guidedOpen && e.isTrusted && e.code === 'Space') onStepPressed();
     if (guidedOpen && e.code === 'Escape') { e.stopImmediatePropagation(); closeGuided(); }
 }, true);
+
+// ── DOM locale application ────────────────────────────────────────
+function applyLocaleToDOM() {
+    const L = getLocale().ui;
+    document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.dataset.i18n;
+        if (L[key] !== undefined) el.textContent = L[key];
+    });
+    document.querySelectorAll('[data-i18n-html]').forEach(el => {
+        const key = el.dataset.i18nHtml;
+        if (L[key] !== undefined) el.innerHTML = L[key];
+    });
+}
+
+// ── Language toggle ────────────────────────────────────────────────
+const langBtn = document.getElementById('btn-lang');
+
+function syncLangBtn() {
+    const lang = getLang();
+    langBtn.textContent = lang === 'ja' ? 'JA' : 'EN';
+    langBtn.classList.toggle('active', lang === 'ja');
+    document.documentElement.lang = lang;
+}
+
+langBtn.addEventListener('click', () => {
+    setLocale(getLang() === 'ja' ? 'en' : 'ja');
+    syncLangBtn();
+    applyLocaleToDOM();
+    // Re-render any open panels immediately
+    if (tutOpen)    renderTutStep();
+    if (guidedOpen) renderGuidedStep();
+    syncBanner();
+});
+
+syncLangBtn();
+applyLocaleToDOM();

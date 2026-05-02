@@ -956,3 +956,15 @@ body.modal-open { overflow: hidden; }
     opacity: 1;
     transform: translateX(-50%) translateY(0);
 }
+
+/* ── Language toggle button ──────────────────────────── */
+#btn-lang {
+    min-width: 36px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+#btn-lang.active {
+    background: #0d419d;
+    color: #e6edf3;
+    border-color: #1f6feb;
+}
