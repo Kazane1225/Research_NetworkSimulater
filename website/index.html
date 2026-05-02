@@ -319,17 +319,25 @@
         <span id="guided-indicator"></span>
         <button id="guided-close" aria-label="Close">✕</button>
     </div>
+    <div id="guided-tabs">
+        <button class="guided-tab active" data-scenario="0">Stabilizing</button>
+        <button class="guided-tab"        data-scenario="1">Terminating</button>
+    </div>
     <div id="guided-title"></div>
     <div id="guided-body"></div>
     <div id="guided-action" style="display:none">
         <span id="guided-action-icon">&#128075;</span>
         <span id="guided-action-text"></span>
     </div>
+    <div id="step-commentary" style="display:none"></div>
     <div id="guided-footer">
         <button class="tut-btn" id="guided-skip">Skip →→</button>
         <button class="tut-btn tut-primary" id="guided-next" style="display:none">Next →</button>
     </div>
 </div>
+
+<!-- ── Step toast (shown outside guided panel) ───────────────── -->
+<div id="step-toast"></div>
 
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="js/ui.js"></script>
