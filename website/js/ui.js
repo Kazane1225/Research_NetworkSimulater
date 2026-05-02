@@ -434,97 +434,152 @@ window.addEventListener('keydown', e => {
 }, true);
 
 // ── Interactive Guided Tutorial ────────────────────────────────────────────
-// Steps with trigger=null require the user to click Next.
-// Steps with a trigger function auto-advance when the condition becomes true.
-// Steps with waitForStep=true also require the user to press ▶ Step / Space.
+// Each step may have:
+//   trigger   – () => bool : auto-advances when true (shows Skip, hides Next)
+//   action    – string     : instruction shown in the action bar
+//   highlight – CSS selector of the toolbar element to pulse-highlight
 let guidedStepFired = false;  // set to true when user presses Step/Space
 
-const GUIDED_STEPS = [
+const GUIDED_STEPS_STAB = [
     {
         title: 'Welcome — Let\'s Count!',
-        body:  'We\'ve loaded a small example network: 6 agents across 5 rounds. Your goal is to understand how the counting algorithm works — all without knowing any agent\'s identity.',
-        action: null,
-        trigger: null,
+        body:  'We\'ve loaded a small example network: 6 agents across 5 rounds. Your goal is to understand how the Stabilizing counting algorithm works — all without knowing any agent\'s identity.',
+        action: null, trigger: null, highlight: null,
     },
     {
         title: 'Agents are Anonymous',
         body:  'The circles in the left panel are agents. They have no names or IDs. The only exception is the L (leader), which has a special starting input of 0. All other agents start with input 1 and are completely identical at first.',
-        action: null,
-        trigger: null,
+        action: null, trigger: null, highlight: null,
     },
     {
         title: 'Round 1: A Ring',
-        body:  'The network starts as a ring: L — 1 — 2 — 3 — 4 — 5 — L. Notice that agents 1 and 5 are in symmetric positions (both sit next to L), and agents 2, 3, 4 are also symmetric. This matters — the algorithm will have to figure out who is who!',
-        action: null,
-        trigger: null,
+        body:  'The network starts as a ring: L — 1 — 2 — 3 — 4 — 5 — L. Agents 1 & 5 are symmetric (both next to L), and agents 2, 3, 4 are also symmetric. The algorithm will have to resolve this ambiguity!',
+        action: null, trigger: null, highlight: null,
     },
     {
         title: 'Advance to Round 2',
         body:  'Press ↓ or scroll the mouse wheel on the canvas to go to Round 2. Notice which agents the leader L is now connected to — the topology is already different!',
         action: 'Press ↓ or scroll to advance',
         trigger: () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 1,
+        highlight: '#btn-next-round',
     },
     {
         title: 'The Network is Dynamic!',
         body:  'The links changed — a different set of connections is active. This is what makes the network dynamic: an adversary can rewire it each round. Notice the History Tree (right panel) grew one level.',
-        action: null,
-        trigger: null,
+        action: null, trigger: null, highlight: null,
     },
     {
         title: 'Advance to Round 3',
         body:  'Press ↓ once more to reach Round 3. The leader L now connects to agents it did not reach before — this is how the network stays unpredictable.',
         action: 'Press ↓ or scroll to advance',
         trigger: () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 2,
+        highlight: '#btn-next-round',
     },
     {
         title: 'Five Dynamic Rounds',
         body:  'This network has 5 rounds — feel free to browse all of them with ↓. The History Tree grows one level per round. Agents with different observation sequences have different tree shapes, making them distinguishable.',
-        action: null,
-        trigger: null,
+        action: null, trigger: null, highlight: null,
     },
     {
         title: 'Enable the Stabilizing Algorithm',
-        body:  'Time to count! Click the Stabilizing button in the toolbar. A description banner will appear below explaining the algorithm and its theoretical guarantee.',
+        body:  'Time to count! Click the Stabilizing button in the toolbar. A description banner will appear explaining the algorithm and its theoretical guarantee.',
         action: 'Click the Stabilizing button',
         trigger: () => algoState === 1,
+        highlight: '.algo-group',
     },
     {
         title: 'Select an Agent',
         body:  'Left-click any agent (circle) in the left panel to select it. The algorithm needs a starting view to work from.',
         action: 'Left-click any agent in the left panel',
         trigger: () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
+        highlight: null,
     },
     {
         title: 'Execute One Step',
         body:  'Press ▶ Step in the toolbar (or Space). The algorithm will look for exposed pairs — agents that mutually observed each other — and start assigning anonymity estimates.',
         action: 'Press ▶ Step or Space',
         trigger: () => guidedStepFired,
+        highlight: '#btn-step',
     },
     {
         title: 'Colors Changed!',
-        body:  'Look at the History Tree: L turns green immediately (it is unique). But agents 1 & 5 and agents 2, 3 & 4 start YELLOW — the algorithm recognises they are indistinguishable in round 1, so it can only guess. Keep stepping to watch it resolve the ambiguity.',
-        action: null,
-        trigger: null,
+        body:  'Look at the History Tree: L turns green immediately (it is unique). Agents 1 & 5 and agents 2, 3 & 4 start YELLOW — the algorithm recognises they are indistinguishable in round 1, so it can only guess. Keep stepping to watch it resolve the ambiguity.',
+        action: null, trigger: null, highlight: null,
     },
     {
         title: 'Keep Stepping Until Done',
         body:  'Press ▶ Step several more times. Watch the root node of the History Tree — when it turns green and shows "6", the algorithm has stabilized and correctly determined n = 6!',
-        action: 'Keep pressing ▶ Step until the root node shows 6 and turns green',
+        action: 'Keep pressing ▶ Step until the root node turns green',
         trigger: () => typeof Module._GetRootGuess === 'function' &&
                        typeof Module._GetNumAgents === 'function' &&
                        Module._GetNumAgents() > 0 &&
                        Module._GetRootGuess() === Module._GetNumAgents(),
+        highlight: '#btn-step',
     },
     {
         title: '🎉 n = 6 Counted Successfully!',
-        body:  'The root node shows 6 — the stabilizing algorithm has correctly determined n = 6! The green nodes show the equivalence classes it counted. Now try: load a bigger network, switch to the Terminating algorithm, or open the Glossary for more concepts.',
-        action: null,
-        trigger: null,
+        body:  'The root node shows 6 — the stabilizing algorithm has correctly determined n = 6! Try the Terminating tab above to see a stronger variant with a different guarantee.',
+        action: null, trigger: null, highlight: null,
     },
 ];
 
-let guidedStep = 0;
-let guidedOpen = false;
+const GUIDED_STEPS_TERM = [
+    {
+        title: 'Terminating — Stronger Guarantee',
+        body:  'Unlike Stabilizing (which may briefly show wrong values), the Terminating algorithm halts explicitly and only ever outputs the correct answer. Cost: it terminates by round 3n − 3 instead of 2n − 2. Same 6-agent network is loaded.',
+        action: null, trigger: null, highlight: null,
+    },
+    {
+        title: 'Enable Terminating Algorithm',
+        body:  'Click the Terminating button in the toolbar. The banner will update to show the 3n − 3 bound. For n = 6 that is at most 15 rounds.',
+        action: 'Click the Terminating button',
+        trigger: () => algoState === 2,
+        highlight: '.algo-group',
+    },
+    {
+        title: 'Select an Agent',
+        body:  'Left-click any agent in the left panel. The algorithm analyses the selected agent\'s history tree to look for verifiable evidence of the network size.',
+        action: 'Left-click any agent',
+        trigger: () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
+        highlight: null,
+    },
+    {
+        title: 'First Step — Watch the Colours',
+        body:  'Press ▶ Step. Look at the History Tree colours: cyan = initial-level guess (uncommitted), orange = intermediate refinement. Key point: no node ever turns red — the algorithm never commits to a wrong answer.',
+        action: 'Press ▶ Step or Space',
+        trigger: () => guidedStepFired,
+        highlight: '#btn-step',
+    },
+    {
+        title: 'Building Isles',
+        body:  'The Terminating algorithm builds "isles" — groups of agents whose combined evidence mutually confirms the count. Orange nodes are isles being refined. Only when an isle is fully verified does the root commit (turn green). Keep stepping.',
+        action: null, trigger: null, highlight: null,
+    },
+    {
+        title: 'Step to Termination',
+        body:  'Press ▶ Step repeatedly. Each step propagates evidence from newly seen agents. When the algorithm is certain, the root turns green and halts — no further step will ever change it.',
+        action: 'Press ▶ Step until the root turns green with n = 6',
+        trigger: () => typeof Module._GetRootGuess === 'function' &&
+                       typeof Module._GetNumAgents === 'function' &&
+                       Module._GetNumAgents() > 0 &&
+                       Module._GetRootGuess() === Module._GetNumAgents(),
+        highlight: '#btn-step',
+    },
+    {
+        title: '🎉 Terminated — n = 6!',
+        body:  'The Terminating algorithm has halted with the provably correct answer n = 6. Unlike Stabilizing, no incorrect output ever appeared. Switch back to the Stabilizing tab and compare the number of steps and round bounds.',
+        action: null, trigger: null, highlight: null,
+    },
+];
+
+const SCENARIOS = [
+    { name: 'Stabilizing', steps: GUIDED_STEPS_STAB },
+    { name: 'Terminating', steps: GUIDED_STEPS_TERM },
+];
+
+let guidedStep     = 0;
+let guidedScenario = 0;
+let guidedOpen     = false;
 let guidedHighlightEl = null;
 let guidedPollTimer   = null;
 
@@ -538,23 +593,32 @@ const guidedSkipBtn   = document.getElementById('guided-skip');
 const guidedNextBtn   = document.getElementById('guided-next');
 const guidedCloseBtn  = document.getElementById('guided-close');
 const learnToggleBtn  = document.getElementById('btn-learn');
+const stepCommentaryEl = document.getElementById('step-commentary');
+const stepToastEl      = document.getElementById('step-toast');
 
 function clearGuidedHighlight() {
     if (guidedHighlightEl) {
-        guidedHighlightEl.classList.remove('tutorial-highlight');
+        guidedHighlightEl.classList.remove('guided-highlight');
         guidedHighlightEl = null;
     }
 }
 
+function applyGuidedHighlight(sel) {
+    clearGuidedHighlight();
+    if (!sel) return;
+    const el = document.querySelector(sel);
+    if (el) { el.classList.add('guided-highlight'); guidedHighlightEl = el; }
+}
+
 function renderGuidedStep() {
-    const s = GUIDED_STEPS[guidedStep];
-    const isLast = guidedStep === GUIDED_STEPS.length - 1;
+    const steps  = SCENARIOS[guidedScenario].steps;
+    const s      = steps[guidedStep];
+    const isLast = guidedStep === steps.length - 1;
 
-    guidedIndicator.textContent = `${guidedStep + 1} / ${GUIDED_STEPS.length}`;
+    guidedIndicator.textContent = `${guidedStep + 1} / ${steps.length}`;
     guidedTitleEl.textContent   = s.title;
-    guidedBodyEl.textContent    = s.body;
+    guidedBodyEl .textContent   = s.body;
 
-    // Action prompt
     if (s.action) {
         guidedActionDiv.style.display = '';
         guidedActionTxt.textContent   = s.action;
@@ -562,7 +626,6 @@ function renderGuidedStep() {
         guidedActionDiv.style.display = 'none';
     }
 
-    // Footer buttons
     if (s.trigger) {
         guidedSkipBtn.style.display = '';
         guidedNextBtn.style.display = 'none';
@@ -572,12 +635,14 @@ function renderGuidedStep() {
         guidedNextBtn.textContent   = isLast ? '✓ Done' : 'Next →';
     }
 
-    clearGuidedHighlight();
+    stepCommentaryEl.style.display = 'none';
+    applyGuidedHighlight(s.highlight);
 }
 
 function advanceGuided() {
     guidedStepFired = false;
-    if (guidedStep < GUIDED_STEPS.length - 1) {
+    const steps = SCENARIOS[guidedScenario].steps;
+    if (guidedStep < steps.length - 1) {
         guidedStep++;
         renderGuidedStep();
     } else {
@@ -589,7 +654,7 @@ function startGuidedPoll() {
     if (guidedPollTimer) return;
     guidedPollTimer = setInterval(() => {
         if (!guidedOpen) { clearInterval(guidedPollTimer); guidedPollTimer = null; return; }
-        const s = GUIDED_STEPS[guidedStep];
+        const s = SCENARIOS[guidedScenario].steps[guidedStep];
         if (s.trigger && s.trigger()) advanceGuided();
     }, 300);
 }
@@ -599,18 +664,22 @@ function openGuided() {
         alert('WASM not yet ready — please wait a moment and try again.');
         return;
     }
-    // Close UI tour if open
     if (tutOpen) closeTutorial();
 
-    // Load tutorial network and reset algorithm state
     Module._TutorialLoadNetwork();
     if (algoState !== 0) cycleAlgoTo(0);
 
-    guidedStep = 0;
-    guidedOpen = true;
+    guidedStep      = 0;
+    guidedOpen      = true;
     guidedStepFired = false;
     guidedPanel.classList.add('open');
     learnToggleBtn.classList.add('active');
+    stepCommentaryEl.style.display = 'none';
+
+    document.querySelectorAll('.guided-tab').forEach((tab, i) =>
+        tab.classList.toggle('active', i === guidedScenario)
+    );
+
     renderGuidedStep();
     startGuidedPoll();
 }
@@ -620,6 +689,7 @@ function closeGuided() {
     guidedPanel.classList.remove('open');
     learnToggleBtn.classList.remove('active');
     clearGuidedHighlight();
+    stepCommentaryEl.style.display = 'none';
     if (guidedPollTimer) { clearInterval(guidedPollTimer); guidedPollTimer = null; }
 }
 
@@ -628,8 +698,94 @@ guidedCloseBtn.addEventListener('click', closeGuided);
 guidedSkipBtn .addEventListener('click', advanceGuided);
 guidedNextBtn .addEventListener('click', advanceGuided);
 
-// Detect Step button press for waitForStep steps
-function onStepPressed() { if (guidedOpen) guidedStepFired = true; }
+// ── Scenario tab switching ────────────────────────────────────────────────
+document.querySelectorAll('.guided-tab').forEach((tab, i) => {
+    tab.addEventListener('click', () => {
+        if (i === guidedScenario) return;
+        guidedScenario  = i;
+        guidedStep      = 0;
+        guidedStepFired = false;
+        if (guidedOpen) {
+            if (algoState !== 0) cycleAlgoTo(0);
+            if (typeof Module._TutorialLoadNetwork === 'function') Module._TutorialLoadNetwork();
+        }
+        document.querySelectorAll('.guided-tab').forEach((t, j) =>
+            t.classList.toggle('active', j === i)
+        );
+        if (guidedOpen) renderGuidedStep();
+    });
+});
+
+// ── Step commentary / toast (feature #8) ─────────────────────────────────
+let preStepState      = null;
+let stepCommentaryTimer = null;
+let stepToastTimer      = null;
+
+function captureModuleState() {
+    if (typeof Module._GetNumAgents !== 'function') return null;
+    const n = Module._GetNumAgents();
+    if (n === 0) return null;
+    return {
+        n,
+        unique:    Module._GetNumUniqueAgents(),
+        classes:   Module._GetNumAnonymityClasses(),
+        rootGuess: typeof Module._GetRootGuess === 'function' ? Module._GetRootGuess() : -1,
+    };
+}
+
+function buildCommentaryText(before, after) {
+    if (!before || !after) return null;
+    const parts = [];
+    const du = after.unique - before.unique;
+    if (du > 0) {
+        parts.push(`+${du} agent${du > 1 ? 's' : ''} uniquely identified  (${after.unique} / ${after.n})`);
+    }
+    if (after.classes !== before.classes && before.classes > 0) {
+        parts.push(`Anonymity classes: ${before.classes} → ${after.classes}`);
+    }
+    if (after.rootGuess !== before.rootGuess && after.rootGuess > 0) {
+        const was = before.rootGuess > 0 ? before.rootGuess : '?';
+        const tag = after.rootGuess === after.n ? '  ✓ correct!' : '';
+        parts.push(`Root guess: ${was} → ${after.rootGuess}${tag}`);
+    }
+    if (parts.length === 0) return 'No observable change — try selecting a different agent.';
+    return parts.join('\n');
+}
+
+function showStepCommentary(text) {
+    stepCommentaryEl.textContent   = text;
+    stepCommentaryEl.style.display = '';
+    stepCommentaryEl.style.animation = 'none';
+    void stepCommentaryEl.offsetHeight;
+    stepCommentaryEl.style.animation = '';
+}
+
+function showStepToast(text) {
+    stepToastEl.textContent = text.replace(/\n/g, '  ·  ');
+    stepToastEl.classList.add('visible');
+    clearTimeout(stepToastTimer);
+    stepToastTimer = setTimeout(() => stepToastEl.classList.remove('visible'), 3500);
+}
+
+function onStepPressed() {
+    if (guidedOpen) guidedStepFired = true;
+
+    preStepState = captureModuleState();
+
+    clearTimeout(stepCommentaryTimer);
+    stepCommentaryTimer = setTimeout(() => {
+        if (algoState === 0) return;
+        const after = captureModuleState();
+        const text  = buildCommentaryText(preStepState, after);
+        if (!text) return;
+        if (guidedOpen) {
+            showStepCommentary(text);
+        } else {
+            showStepToast(text);
+        }
+    }, 700);
+}
+
 document.getElementById('btn-step').addEventListener('click', onStepPressed);
 window.addEventListener('keydown', e => {
     if (guidedOpen && e.isTrusted && e.code === 'Space') onStepPressed();
