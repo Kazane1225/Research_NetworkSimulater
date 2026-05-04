@@ -1,5 +1,47 @@
 #include "main.h"
 
+/* ── hash utilities ─────────────────────────────────────────── */
+
+static unsigned long long hash_mix(unsigned long long h,unsigned long long v){
+    h^=v;
+    h*=0x9e3779b97f4a7c15ULL;
+    h^=h>>30;
+    return h;
+}
+
+static int cmp_ull(const void *a,const void *b){
+    unsigned long long x=*(const unsigned long long *)a;
+    unsigned long long y=*(const unsigned long long *)b;
+    return (x>y)-(x<y);
+}
+
+/* Merkle hash: input + outdegree + sorted children hashes only.
+   Red edges are intentionally excluded to avoid the circular ordering dependency
+   (red edges point from level L to level L-1, which has not yet been processed
+   in a bottom-up (post-order) traversal). */
+static void ComputeNodeHash(HistoryTree *h){
+    unsigned long long hash=0xcbf29ce484222325ULL;
+    hash=hash_mix(hash,(unsigned long long)h->input);
+    hash=hash_mix(hash,(unsigned long long)h->outdegree);
+    int nc=h->children->tot;
+    hash=hash_mix(hash,(unsigned long long)nc);
+    if(nc>0){
+        unsigned long long *ch=malloc((size_t)nc*sizeof(unsigned long long));
+        for(int i=0;i<nc;i++)ch[i]=((HistoryTree *)h->children->items[i])->hash;
+        qsort(ch,(size_t)nc,sizeof(unsigned long long),cmp_ull);
+        for(int i=0;i<nc;i++)hash=hash_mix(hash,ch[i]);
+        free(ch);
+    }
+    h->hash=hash;
+}
+
+/* Post-order DFS: recompute Merkle hashes for the entire subtree rooted at h. */
+void ComputeHashBottomUp(HistoryTree *h){
+    for(int i=0;i<h->children->tot;i++)
+        ComputeHashBottomUp(h->children->items[i]);
+    ComputeNodeHash(h);
+}
+
 HistoryTree *NewHistoryTree(void){ // creates new root
     HistoryTree *h=malloc(sizeof(HistoryTree));
     h->input=-1;
@@ -10,6 +52,7 @@ HistoryTree *NewHistoryTree(void){ // creates new root
     h->outdegree=-1;
     h->reference=NULL;
     h->data=NULL;
+    h->hash=0;
     return h;
 }
 
@@ -27,19 +70,33 @@ Observation *NewObservation(HistoryTree *history,int multiplicity){
     Observation *o=malloc(sizeof(Observation));
     o->history=history;
     o->multiplicity=multiplicity;
+    o->finalLeafAtSend=NULL;
     return o;
 }
 
-static Observation *FindRedEdge(HistoryTree *h1,HistoryTree *h2){ // find red edge from h1 to h2; return NULL if not found
-    for(int i=0;i<h1->observations->tot;i++){
-        Observation *o=h1->observations->items[i];
-        if(o->history==h2)return o;
+static Observation *FindRedEdge(HistoryTree *h1,HistoryTree *h2){ // binary search by h2 pointer; observations kept sorted by o->history
+    int lo=0,hi=h1->observations->tot-1;
+    uintptr_t key=(uintptr_t)h2;
+    while(lo<=hi){
+        int mid=(lo+hi)/2;
+        Observation *o=h1->observations->items[mid];
+        uintptr_t v=(uintptr_t)o->history;
+        if(v==key)return o;
+        if(v<key)lo=mid+1; else hi=mid-1;
     }
     return NULL;
 }
 
-static void AddNewRedEdge(HistoryTree *h1,HistoryTree *h2,int multiplicity){ // assumes red edge between h1 and h2 does not exist
-    AddVector(h1->observations,NewObservation(h2,multiplicity));
+static void AddNewRedEdge(HistoryTree *h1,HistoryTree *h2,int multiplicity){ // insert in sorted position to keep observations sorted by o->history
+    Observation *o=NewObservation(h2,multiplicity);
+    uintptr_t key=(uintptr_t)h2;
+    int lo=0,hi=h1->observations->tot-1;
+    while(lo<=hi){
+        int mid=(lo+hi)/2;
+        if((uintptr_t)((Observation *)h1->observations->items[mid])->history<key)lo=mid+1;
+        else hi=mid-1;
+    }
+    InsertVector(h1->observations,lo,o);
 }
 
 void AddRedEdge(HistoryTree *h1,HistoryTree *h2,int multiplicity){ // add red edge between h1 and h2, assuming h1 is in lower level
@@ -58,6 +115,12 @@ HistoryTree *AddHistoryTreeChild(HistoryTree *h,int input){ // adds a child node
     return h2;
 }
 
+static void ResetReferences(HistoryTree *h){
+    h->reference=NULL;
+    for(int i=0;i<h->children->tot;i++)
+        ResetReferences(h->children->items[i]);
+}
+
 static bool EquivalentNodes(HistoryTree *h1,HistoryTree *h2){ // used when constructing isomorphisms
     if(!h1 || !h2)return false;
     if(!h1->parent){ if(h2->parent)return false; }
@@ -74,10 +137,35 @@ static bool EquivalentNodes(HistoryTree *h1,HistoryTree *h2){ // used when const
     return true;
 }
 
-static void ResetReferences(HistoryTree *h){
-    h->reference=NULL;
-    for(int i=0;i<h->children->tot;i++)
-        ResetReferences(h->children->items[i]);
+/* ── child-lookup hash map ─────────────────────────────────────────────────
+   Groups b->children by (input, outdegree, observations_count) — the exact
+   fields checked in O(1) at the top of EquivalentNodes.  A key mismatch
+   guarantees EquivalentNodes would return false, so we skip the call entirely.
+   Collisions (same key, structurally distinct nodes) fall through to
+   EquivalentNodes as usual.  Load factor is kept ≤ 50%.               */
+typedef struct { unsigned long long key; HistoryTree *node; } ChildEntry;
+
+static unsigned long long local_key(HistoryTree *h){
+    unsigned long long k=0xcbf29ce484222325ULL;
+    k=hash_mix(k,(unsigned long long)(h->input+0x8000ULL));
+    k=hash_mix(k,(unsigned long long)(h->outdegree+2));
+    k=hash_mix(k,(unsigned long long)h->observations->tot);
+    return k?k:1ULL; /* 0 reserved for empty slot */
+}
+static void cmap_put(ChildEntry *map,int cap,HistoryTree *node){
+    unsigned long long k=local_key(node);
+    int idx=(int)(k%(unsigned long long)cap);
+    while(map[idx].key){if(++idx==cap)idx=0;}
+    map[idx].key=k; map[idx].node=node;
+}
+static HistoryTree *cmap_get(ChildEntry *map,int cap,HistoryTree *x){
+    unsigned long long k=local_key(x);
+    int idx=(int)(k%(unsigned long long)cap);
+    while(map[idx].key){
+        if(map[idx].key==k&&EquivalentNodes(x,map[idx].node))return map[idx].node;
+        if(++idx==cap)idx=0;
+    }
+    return NULL;
 }
 
 HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // modifies h1; returns endpoint in new tree and whether any nodes were added
@@ -87,28 +175,31 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
     h2->reference=h1; // map root of h2 to root of h1
     AppendQueue(q,h2); // enqueue root of h2
     while(!IsQueueEmpty(q)){
-        HistoryTree *a=PopQueue(q); // the children of node a of h2 have to be mapped to h1
-        if(a->level>deepest->level)deepest=a; // update deepest
-        HistoryTree *b=a->reference; // node b of h1 is isomorphic to a
-        for(int i=0;i<a->children->tot;i++){ // scan children of a
+        HistoryTree *a=PopQueue(q); // children of a in h2 must be mapped into h1
+        if(a->level>deepest->level)deepest=a;
+        HistoryTree *b=a->reference; // corresponding node in h1
+        /* Build child-lookup map for b.  Capacity covers existing children plus
+           up to a->children->tot new ones so load stays ≤ 50% after inserts. */
+        int cap=(b->children->tot+a->children->tot)*2+3;
+        ChildEntry *map=(ChildEntry *)calloc(cap,sizeof(ChildEntry));
+        for(int j=0;j<b->children->tot;j++) cmap_put(map,cap,b->children->items[j]);
+        for(int i=0;i<a->children->tot;i++){
             HistoryTree *x=a->children->items[i];
-            HistoryTree *y=NULL;
-            AppendQueue(q,x); // enqueue child x of a
-            for(int j=0;j<b->children->tot;j++){ // search for child y of b isomorphic to x
-                HistoryTree *z=b->children->items[j];
-                if(EquivalentNodes(x,z)){ y=z; break; }
-            }
-            if(!y){ // y has not been found
+            AppendQueue(q,x);
+            HistoryTree *y=cmap_get(map,cap,x); // O(1) expected; EquivalentNodes only for key matches
+            if(!y){
                 if(added)*added=true;
-                y=AddHistoryTreeChild(b,x->input); // add new child y to b
-                for(int j=0;j<x->observations->tot;j++){ // scan red edges from x
+                y=AddHistoryTreeChild(b,x->input);
+                for(int j=0;j<x->observations->tot;j++){
                     Observation *o=x->observations->items[j];
-                    AddNewRedEdge(y,o->history->reference,o->multiplicity); // create isomorphic red edge from y
+                    AddNewRedEdge(y,o->history->reference,o->multiplicity);
                 }
                 y->outdegree=x->outdegree;
+                cmap_put(map,cap,y); // keep map current for remaining children of a
             }
-            x->reference=y; // map x to y
+            x->reference=y;
         }
+        free(map);
     }
     FreeQueue(q);
     deepest=deepest->reference;
@@ -129,20 +220,21 @@ bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2){ // does h1 contain an
     h2->reference=h1; // map root of h2 to root of h1
     AppendQueue(q,h2);
     while(!IsQueueEmpty(q)){
-        HistoryTree *a=PopQueue(q); // node in h2
-        if(!result)continue; // drain queue after failure
-        HistoryTree *b=a->reference; // corresponding node in h1
+        HistoryTree *a=PopQueue(q);
+        if(!result){continue;} // drain queue after failure
+        HistoryTree *b=a->reference;
+        int nc=b->children->tot;
+        int cap=nc*2+3;
+        ChildEntry *map=(ChildEntry *)calloc(cap,sizeof(ChildEntry));
+        for(int j=0;j<nc;j++) cmap_put(map,cap,b->children->items[j]);
         for(int i=0;i<a->children->tot;i++){
-            HistoryTree *x=a->children->items[i]; // child of a in h2
-            HistoryTree *y=NULL;
-            for(int j=0;j<b->children->tot;j++){
-                HistoryTree *z=b->children->items[j]; // child of b in h1
-                if(EquivalentNodes(x,z)){ y=z; break; }
-            }
-            if(!y){ result=false; break; } // no matching child found
+            HistoryTree *x=a->children->items[i];
+            HistoryTree *y=cmap_get(map,cap,x);
+            if(!y){result=false;break;}
             x->reference=y;
             AppendQueue(q,x);
         }
+        free(map);
     }
     FreeQueue(q);
     ResetReferences(h2);
@@ -150,5 +242,6 @@ bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2){ // does h1 contain an
 }
 
 bool HistoryTreeEquals(HistoryTree *h1,HistoryTree *h2){ // is h1 isomorphic to h2?
+    if(h1->hash && h2->hash && h1->hash!=h2->hash)return false; // O(1) short-circuit via Merkle hash
     return HistoryTreeContains(h1,h2) && HistoryTreeContains(h2,h1);
 }

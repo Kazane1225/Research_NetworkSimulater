@@ -56,18 +56,34 @@ static void ComputeAuxDataCoordinates(int i,int j,float x1,float y1,float x2,flo
 
 static void ComputeAuxDataRedEdges(void){
     SetWindowContext(win1);
-    for(int i=0;i<aux->tot;i++)
+    /* For each level i, build a hash map HistoryTree* → AuxData-index for level i-1,
+       reducing the lookup from O(n) linear scan to O(1).
+       Overall cost drops from O(R×n²×obs) to O(R×n×obs).                          */
+    for(int i=1;i<aux->tot;i++){
+        int pn=GetLevel(i-1)->tot;
+        int cap=pn*2+3;
+        HistoryTree **hkeys=calloc(cap,sizeof(HistoryTree*));
+        int *hvals=malloc(cap*sizeof(int));
+        for(int k=0;k<pn;k++){
+            HistoryTree *h=GetAuxData(i-1,k)->h;
+            int idx=(int)((uintptr_t)h%(unsigned)cap);
+            while(hkeys[idx]&&hkeys[idx]!=h){if(++idx==cap)idx=0;}
+            hkeys[idx]=h; hvals[idx]=k;
+        }
         for(int j=0;j<GetLevel(i)->tot;j++){
             AuxData *data=GetAuxData(i,j);
-            for(int l=0;l<data->h->observations->tot;l++)
-                for(int k=0;k<GetLevel(i-1)->tot;k++){
-                    Observation *obs=data->h->observations->items[l];
-                    if(obs->history==GetAuxData(i-1,k)->h){
-                        AddVectorI(data->observations,k);
-                        AddVectorI(data->multiplicities,obs->multiplicity);
-                    }
+            for(int l=0;l<data->h->observations->tot;l++){
+                Observation *obs=data->h->observations->items[l];
+                int idx=(int)((uintptr_t)obs->history%(unsigned)cap);
+                while(hkeys[idx]&&hkeys[idx]!=obs->history){if(++idx==cap)idx=0;}
+                if(hkeys[idx]==obs->history){
+                    AddVectorI(data->observations,hvals[idx]);
+                    AddVectorI(data->multiplicities,obs->multiplicity);
                 }
+            }
         }
+        free(hkeys); free(hvals);
+    }
 }
 
 static void ComputeAuxDataAnonymities(void){

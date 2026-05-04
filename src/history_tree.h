@@ -1,6 +1,7 @@
 typedef struct{ // used for messages between entities and for red edges
     struct HistoryTree *history; // history observed
     int multiplicity; // number of times observed
+    struct HistoryTree *finalLeafAtSend; // sender's finalLeaf at send time; NULL for persistent red edges
 }Observation;
 
 typedef struct HistoryTree{
@@ -12,6 +13,7 @@ typedef struct HistoryTree{
     int outdegree; // messages sent in previous round; -1 if not outAware
     struct HistoryTree *reference; // target of isomorphism (only used when merging history trees)
     void *data; // only used in finalHistory
+    unsigned long long hash; // structural hash of this subtree (0 = not yet computed)
 }HistoryTree;
 
 HistoryTree *NewHistoryTree(void); // creates new root
@@ -23,3 +25,4 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added); // 
 HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest); // returns copied tree and deepest node
 bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2); // does h1 contain an isomorphic copy of h2?
 bool HistoryTreeEquals(HistoryTree *h1,HistoryTree *h2); // is h1 isomorphic to h2?
+void ComputeHashBottomUp(HistoryTree *h); // compute Merkle hashes bottom-up for entire subtree

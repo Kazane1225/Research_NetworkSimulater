@@ -79,21 +79,32 @@ void InitNetwork(int type,int n){
     win1->invalid=true;
 }
 
-void ExecuteNetwork(void){
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        if(e->history)FreeHistoryTree(e->history);
-        e->outdegree=outAware?0:-1;
-        e->current=e->history=NewHistoryTree();
-        ExtendHistory(e);
+/* ── incremental execution helpers ─────────────────────────── */
+
+/* Returns the node in copy_root's tree that corresponds to orig_current in orig_root's tree.
+   Works by recording the child-index path from orig_current back to orig_root, then following
+   it in copy_root.  The two trees must be structurally identical up to orig_current. */
+static HistoryTree *FindCurrentInCopy(HistoryTree *orig_root,HistoryTree *orig_current,HistoryTree *copy_root){
+    if(orig_current==orig_root)return copy_root;
+    int depth=0;
+    HistoryTree *n=orig_current;
+    while(n->parent){n=n->parent;depth++;}
+    int *path=malloc((size_t)depth*sizeof(int));
+    n=orig_current;
+    for(int i=depth-1;i>=0;i--){
+        HistoryTree *p=n->parent;
+        for(int j=0;j<p->children->tot;j++){
+            if(p->children->items[j]==n){path[i]=j;break;}
+        }
+        n=p;
     }
-    for(int r=0;r<network->rounds->tot;r++){
-        Vector *v=network->rounds->items[r];
-        for(int i=0;i<v->tot;i++)
-            ExecuteInteraction(v->items[i]);
-        for(int i=0;i<network->entities->tot;i++)
-            EndRound(GetEntity(i));
-    }
+    n=copy_root;
+    for(int i=0;i<depth;i++)n=n->children->items[path[i]];
+    free(path);
+    return n;
+}
+
+static void RebuildFinalHistory(void){
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
     for(int i=0;i<network->entities->tot;i++){
@@ -101,6 +112,187 @@ void ExecuteNetwork(void){
         e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
     }
     ComputeAuxData(finalHistory);
+    /* Update Merkle hashes on each entity's individual history tree for HistoryTreeEquals short-circuit */
+    for(int i=0;i<network->entities->tot;i++)
+        ComputeHashBottomUp(GetEntity(i)->history);
+}
+
+/* Snapshot all entities' current states as "before the last round". */
+static void TakeSnapshotsBeforeRound(void){
+    for(int i=0;i<network->entities->tot;i++){
+        Entity *e=GetEntity(i);
+        if(e->snap){FreeHistoryTree(e->snap->history);free(e->snap);}
+        e->snap=malloc(sizeof(EntitySnapshot));
+        e->snap->history=CopyHistoryTree(e->history,NULL);
+        e->snap->current=FindCurrentInCopy(e->history,e->current,e->snap->history);
+        e->snap->outdegree=e->outdegree;
+    }
+}
+
+/* Restore all entities from their snapshots.  snap fields are consumed and set NULL. */
+static void RestoreFromSnapshots(void){
+    for(int i=0;i<network->entities->tot;i++){
+        Entity *e=GetEntity(i);
+        FreeHistoryTree(e->history);
+        for(int j=0;j<e->mailbox->tot;j++){Observation *m=e->mailbox->items[j];FreeHistoryTree(m->history);free(m);}
+        FreeVector(e->mailbox);e->mailbox=NewVector(4);
+        /* Take ownership of snap tree directly (no copy needed for RollBack) */
+        e->history=e->snap->history;
+        e->current=e->snap->current;
+        e->outdegree=e->snap->outdegree;
+        free(e->snap);e->snap=NULL;
+    }
+}
+
+/* Restore all entities from their snapshots, keeping snap valid for future re-executions. */
+static void RestoreFromSnapshotsCopy(void){
+    for(int i=0;i<network->entities->tot;i++){
+        Entity *e=GetEntity(i);
+        FreeHistoryTree(e->history);
+        for(int j=0;j<e->mailbox->tot;j++){Observation *m=e->mailbox->items[j];FreeHistoryTree(m->history);free(m);}
+        FreeVector(e->mailbox);e->mailbox=NewVector(4);
+        HistoryTree *h=CopyHistoryTree(e->snap->history,NULL);
+        e->current=FindCurrentInCopy(e->snap->history,e->snap->current,h);
+        e->history=h;
+        e->outdegree=e->snap->outdegree;
+    }
+}
+
+static bool SnapshotsValid(void){
+    if(!network || network->rounds->tot==0)return false;
+    for(int i=0;i<network->entities->tot;i++)
+        if(!GetEntity(i)->snap)return false;
+    return true;
+}
+
+/* Re-execute only the last round using saved snapshots.
+   Restores pre-last-round state (keeping snap valid), replays last round, rebuilds finalHistory.
+   Falls back to full ExecuteNetwork() when snapshots are unavailable. */
+void ReExecuteLastRound(void){
+    if(!SnapshotsValid()){ExecuteNetwork();return;}
+    RestoreFromSnapshotsCopy();
+    Vector *v=network->rounds->items[network->rounds->tot-1];
+    for(int i=0;i<v->tot;i++)ExecuteInteraction(v->items[i]);
+    for(int i=0;i<network->entities->tot;i++)EndRound(GetEntity(i));
+    RebuildFinalHistory();
+}
+
+/* Roll back the last round: entity states revert to pre-last-round snapshots.
+   Called after DeleteRound(last) when the last round was removed.
+   Snap is consumed (invalidated) because it no longer describes the new last round. */
+void RollBackLastRound(void){
+    if(!SnapshotsValid()){ExecuteNetwork();return;}
+    RestoreFromSnapshots(); /* consumes snap → snap=NULL */
+    RebuildFinalHistory();
+}
+
+/* ── incremental finalHistory extension ─────────────────────────────────────
+   After appending one new round, the new level-R nodes in finalHistory are fully
+   determined by (input, outdegree, red_edges_to_prevFinalLeaf[sender]) for each
+   entity.  We collect this info from mailboxes BEFORE EndRound destroys them, then
+   add exactly one new level to finalHistory instead of rebuilding from scratch.
+   Cost: O(n²) per call, independent of R.                                        */
+typedef struct{HistoryTree *target;int mult;}RedInfo;
+static int cmp_redinfo(const void *a,const void *b){
+    uintptr_t pa=(uintptr_t)((const RedInfo *)a)->target;
+    uintptr_t pb=(uintptr_t)((const RedInfo *)b)->target;
+    return (pa>pb)-(pa<pb);
+}
+static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int *counts){
+    int n=network->entities->tot;
+    for(int i=0;i<n;i++){
+        Entity *e=GetEntity(i);
+        HistoryTree *par=prevFL[i];
+        int nc=counts[i];
+        /* Search existing children of par for an equivalent node.
+           Both par->children[j]->observations and infos[i] are sorted ascending
+           by o->history / target pointer, enabling O(nc) zip-comparison.          */
+        HistoryTree *node=NULL;
+        for(int j=0;j<par->children->tot&&!node;j++){
+            HistoryTree *z=par->children->items[j];
+            if(z->input!=e->current->input||z->outdegree!=e->current->outdegree||z->observations->tot!=nc)continue;
+            bool ok=true;
+            for(int k=0;k<nc&&ok;k++){
+                Observation *o=z->observations->items[k];
+                if(o->history!=infos[i][k].target||o->multiplicity!=infos[i][k].mult)ok=false;
+            }
+            if(ok)node=z;
+        }
+        if(!node){
+            node=AddHistoryTreeChild(par,e->current->input);
+            node->outdegree=e->current->outdegree;
+            for(int k=0;k<nc;k++)
+                AddRedEdge(node,infos[i][k].target,infos[i][k].mult);
+        }
+        e->finalLeaf=node;
+    }
+}
+
+/* Append the newly added last round on top of the current (already up-to-date) entity states.
+   Extends finalHistory by exactly one level — O(n²) instead of O(R×n³) full rebuild.
+   Called after InsertRound() appended a round at the end. */
+void AppendLastRound(void){
+    int n=network->entities->tot;
+    TakeSnapshotsBeforeRound(); /* save pre-round entity states for ReExecuteLastRound */
+    /* Save each entity's current finalLeaf (level R-1 node in finalHistory) */
+    HistoryTree **prevFL=malloc(n*sizeof(HistoryTree*));
+    for(int i=0;i<n;i++) prevFL[i]=GetEntity(i)->finalLeaf;
+    /* Execute interactions: SendHistory stores finalLeafAtSend = sender's prevFL in each obs */
+    Vector *v=network->rounds->items[network->rounds->tot-1];
+    for(int i=0;i<v->tot;i++) ExecuteInteraction(v->items[i]);
+    /* Collect (senderFinalLeaf, multiplicity) from mailboxes before EndRound destroys them */
+    RedInfo **infos=malloc(n*sizeof(RedInfo*));
+    int *counts=malloc(n*sizeof(int));
+    for(int i=0;i<n;i++){
+        Entity *e=GetEntity(i);
+        int m=e->mailbox->tot;
+        infos[i]=malloc((m>0?m:1)*sizeof(RedInfo));
+        for(int j=0;j<m;j++){
+            Observation *obs=e->mailbox->items[j];
+            infos[i][j].target=obs->finalLeafAtSend;
+            infos[i][j].mult=obs->multiplicity;
+        }
+        qsort(infos[i],m,sizeof(RedInfo),cmp_redinfo);
+        /* Merge entries with the same sender (same target pointer) */
+        int u=0;
+        for(int j=0;j<m;j++){
+            if(u>0&&infos[i][u-1].target==infos[i][j].target)
+                infos[i][u-1].mult+=infos[i][j].mult;
+            else infos[i][u++]=infos[i][j];
+        }
+        counts[i]=u;
+    }
+    /* Run EndRound for all entities */
+    for(int i=0;i<n;i++) EndRound(GetEntity(i));
+    /* Extend finalHistory by one level (O(n²), independent of R) */
+    ExtendFinalHistoryOneLevel(prevFL,infos,counts);
+    /* Recompute render data and Merkle hashes */
+    ComputeAuxData(finalHistory);
+    for(int i=0;i<n;i++) ComputeHashBottomUp(GetEntity(i)->history);
+    /* Cleanup */
+    for(int i=0;i<n;i++) free(infos[i]);
+    free(infos); free(counts); free(prevFL);
+}
+
+void ExecuteNetwork(void){
+    for(int i=0;i<network->entities->tot;i++){
+        Entity *e=GetEntity(i);
+        if(e->history)FreeHistoryTree(e->history);
+        if(e->snap){FreeHistoryTree(e->snap->history);free(e->snap);e->snap=NULL;}
+        e->outdegree=outAware?0:-1;
+        e->current=e->history=NewHistoryTree();
+        ExtendHistory(e);
+    }
+    int R=network->rounds->tot;
+    for(int r=0;r<R;r++){
+        if(r==R-1)TakeSnapshotsBeforeRound(); /* snapshot of state just before last round */
+        Vector *v=network->rounds->items[r];
+        for(int i=0;i<v->tot;i++)
+            ExecuteInteraction(v->items[i]);
+        for(int i=0;i<network->entities->tot;i++)
+            EndRound(GetEntity(i));
+    }
+    RebuildFinalHistory();
 }
 
 void DoneNetwork(void){

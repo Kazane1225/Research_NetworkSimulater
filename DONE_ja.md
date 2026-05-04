@@ -1,6 +1,107 @@
 # 最適化ログ
 
-## 2026-04-08 — `HistoryTreeContains`: 不要なツリーコピーを除去
+## 2026-05-04 — `AppendLastRound` O(n²) インクリメンタル finalHistory 拡張
+
+**ファイル:** `src/network.c`, `src/entity.c`, `src/history_tree.h`, `src/history_tree.c`
+
+**問題:**  
+`AppendLastRound` は `RebuildFinalHistory()` を呼び、全エンティティのヒストリーツリー（深さ R）を毎回ゼロから `finalHistory` に再マージしていた — O(R × n³)/回。R が増えるほど 1 ラウンド追加のコストが大きくなる。
+
+**修正内容:**  
+`Observation` に `HistoryTree *finalLeafAtSend` フィールドを追加。`SendHistory` は送信時の `e1->finalLeaf`（送信者の `finalHistory` 上の位置）をメールボックス観測に記録する。`EndRound` がメールボックスを破棄する前に、`AppendLastRound` がエンティティごとの `(senderFinalLeaf, multiplicity)` ペアを収集する。`EndRound` 後、`ExtendFinalHistoryOneLevel` が `finalHistory` にちょうど 1 レベルだけ追加する:
+
+1. 収集したペアを `senderFinalLeaf` ポインタ値でソート・マージ（同一送信者 2 回 → 多重度を合算）。
+2. 各エンティティについて `prevFinalLeaf[i]` の既存子ノードをソート済み `observations` リストのzip比較で検索 — O(children × obs)。
+3. 見つからない場合: 新しい子ノードを作成し、`senderFinalLeaf` を対象とした赤エッジを追加（`finalHistory` 内のノードへのポインタ — 追加のポインタ追跡不要）。
+4. `e->finalLeaf` を見つかった/作成したノードに更新。
+
+**効果:**  
+`AppendLastRound` のヒストリー拡張ステップが O(R × n³) → O(n²) に削減。残コストは `ComputeAuxData` O(R × n × obs) と `EndRound` のマージ O(n × R × n²)。インタラクティブな操作（`=` キーを押すたびに 1 ラウンド追加）のヒストリー拡張ボトルネックが解消される。
+
+---
+
+## 2026-05-04 — `ComputeAuxDataRedEdges` ハッシュマップ化
+
+**ファイル:** `src/auxdata.c`
+
+**問題:**  
+`ComputeAuxDataRedEdges` は各赤エッジターゲットをレベル i−1 の全ノードに対して線形探索していた — 1 赤エッジあたり O(n)、全体で O(R × n² × obs)。R と n の両方に比例して遅くなる。
+
+**修正内容:**  
+各レベル i の処理前に、レベル i−1 用の小さなオープンアドレッシングハッシュマップ（`HistoryTree * → AuxData インデックス`）を構築。赤エッジの検索が O(n) → O(1) 期待値に。マップはレベルごとに確保・解放する。
+
+**効果:**  
+`ComputeAuxDataRedEdges` が O(R × n² × obs) → O(R × n × obs) に削減。n=20 の場合、このステップで 20 倍の高速化。
+
+---
+
+## 2026-05-04 — Merkle ハッシュ + `HistoryTreeEquals` 早期終了
+
+**ファイル:** `src/history_tree.h`, `src/history_tree.c`, `src/network.c`
+
+**問題:**  
+`HistoryTreeEquals` は常に BFS 全走査を 2 回（`HistoryTreeContains` × 2）実行していた。明らかに異なるツリーでも例外なく走査していた。
+
+**修正内容:**  
+`HistoryTree` に `unsigned long long hash` フィールドを追加。ハッシュは純粋な Merkle フィンガープリント: `input`・`outdegree`・子ノードハッシュのソート済みマルチセット（赤エッジは意図的に除外 — 赤エッジはレベル R からレベル R−1 へ上向きに向かうため、後順 DFS でレベル R のハッシュを計算する時点ではレベル R−1 のハッシュがまだ計算されておらず、含めると循環依存が生じる）。
+
+- `ComputeNodeHash`: 子ノードが既にハッシュ済みであることを前提に 1 ノードのハッシュを計算。
+- `ComputeHashBottomUp`: 後順 DFS でサブツリー全体のハッシュを再計算。各エンティティのヒストリーが確定した後、`RebuildFinalHistory` 内で呼び出される。
+- `HistoryTreeEquals` の先頭に 1 行のガードを追加: 両方のルートハッシュが非ゼロかつ異なる場合は即座に `false` を返す（等しくないケースで O(1) 終了）。等しいか不確かな場合は従来どおり `HistoryTreeContains` × 2 の BFS にフォールスルー。
+
+**注記:** 以前の試みでは、ハッシュフィールドを用いて `MergeHistoryTrees` と `HistoryTreeContains` の `EquivalentNodes` をオープンアドレッシングの O(1) ハッシュマップに置き換えようとした。しかし赤エッジハッシュを Merkle ハッシュに含めると循環依存が生じるため除外した結果、同レベルの構造的に異なるノードを区別できなくなる問題が発覚し、このアプローチは破棄した。両関数での等価性判定は引き続き `EquivalentNodes`（赤エッジを直接検査）が担う。正しいキー（`local_key`）を用いたハッシュマップは後に別エントリで実装された。
+
+---
+
+## 2026-05-04 — ラウンド追加・削除時のインクリメンタル更新
+
+**ファイル:** `src/network.c`, `src/network.h`, `src/entity.h`, `src/entity.c`
+
+**問題:**  
+ユーザー操作のたびに `ExecuteNetwork()` が全エンティティのヒストリーツリーをゼロから再構築していた。ラウンド数 R、エンティティ数 n として O(R × n²) のコスト。
+
+**修正内容:**  
+`entity.h` に `EntitySnapshot *snap` フィールドを追加（`history` のコピー・`current` のコピー・`outdegree` を保持）。`ExecuteNetwork()` は最終ラウンド適用直前に `TakeSnapshotsBeforeRound()` でスナップショットを保存。3 つの新関数がフルリビルドなしで 3 つのケースを処理する:
+
+- `ReExecuteLastRound()` — スナップショットからコピー復元 → 最終ラウンドを再実行 → `finalHistory` 再構築。スナップショットは引き続き有効。最終ラウンドのリンク追加・削除・全消去に使用。
+- `RollBackLastRound()` — スナップショットの所有権を移して復元 → `finalHistory` 再構築。スナップショットは消費・無効化。最終ラウンド削除時に使用。
+- `AppendLastRound()` — 現在のエンティティ状態を新たにスナップショット保存 → 末尾に追加された新ラウンドを適用 → `finalHistory` 再構築。末尾へのラウンド追加時に使用。
+
+`events.c` の変更箇所:
+- BACKSPACE（ラウンド内リンク全削除）: 最終ラウンドなら `ReExecuteLastRound()`
+- MINUS（ラウンド削除）: 最終ラウンドが削除された場合 `RollBackLastRound()`
+- EQUALS（ラウンド挿入）: 末尾追加なら `AppendLastRound()`
+- マウスリンク追加・削除: 最終ラウンドの単一ラウンド変更なら `ReExecuteLastRound()`（全ラウンドモディファイア時は `ExecuteNetwork()`）
+
+全パスとも、スナップショットが無効な場合（エンティティ追加・削除等の構造変更後）は `ExecuteNetwork()` にフォールバック。
+
+**効果:**  
+最終ラウンドへの操作コストが O(R × n²) → O(n²) に削減。R が増えるほど効果が大きくなる。
+
+---
+
+
+
+## 2026-05-04 — `MergeHistoryTrees` / `HistoryTreeContains` 子ノード探索ハッシュマップ
+
+**ファイル:** `src/history_tree.c`
+
+**問題:**  
+`MergeHistoryTrees` と `HistoryTreeContains` の子ノード探索内ループが、`b` の全子ノードごとに `EquivalentNodes` を呼んでいた — BFS ノードあたり O(C) 回。`EquivalentNodes` は先頭の O(1) フィールドチェック（input・ outdegree・ level・ obs_count）で早期リターンするが、一致した場合は `FindRedEdge` を obs 回呼んで観測検証を行う — O(obs)。BFS ノードあたりの局所コスト: O(C × obs)。
+
+**修正内容:**  
+`b->children` を `local_key = hash(input, outdegree, observations_count)` でインデックスする小さなオープンアドレッシングハッシュマップを追加。この 3 フィールドは `EquivalentNodes` が先頭で O(1) にチェックする内容と完全に一致するため、キー不一致 = `EquivalentNodes` が false を返すことが保証され、呼び出しをスキップできる。キー一致候補のみ `EquivalentNodes` へ進む。
+
+- `ChildEntry` 構造体（key + node ポインタ）、`local_key`、`cmap_put`、`cmap_get` をファイルローカルヘルパーとして追加。
+- マップ容量を `(既存子 + 追加予定子) × 2 + 3` で事前確保し、マージ中の挿入後も負荷率 ≤50% を維持。
+- `MergeHistoryTrees` で新子ノード `y` を作成した際は即座にマップに挿入し、同じ `a` の後続子ノードからも検索できるようにする。
+
+**注記:** キーは `local_key`（input + outdegree + obs_count）であり、Merkle ハッシュ（サブツリー構造のフィンガープリント）ではない。Merkle ハッシュを `EquivalentNodes`（ローカルノードチェック）のプレフィルタとして使うのは誤り—サブツリーが異なる 2 ノードに対して `EquivalentNodes` が true を返すことがある（BFS はレベルごとに処理するため、ローカルチェックはサブツリーの一致を必要としない）。`local_key` は `EquivalentNodes` の正しい必要条件である。
+
+**効果:**  
+子ノードが異なる (input, outdegree, obs_count) を持つ典型ケースでは、不一致子ノードごとに `EquivalentNodes` 呼び出しはゼロ回。子ノード探索コストが O(C × obs) からマップ構築 O(C) + 一致候補 1 件だけの検証 O(obs) に導入。C ≈ n−1 の場合、BFS ノードあたり最大 **~n 倍** の高速化。
+
+---
 
 **ファイル:** `src/history_tree.c`
 
@@ -16,3 +117,23 @@ h1 を変更せずに直接 BFS で同型性を判定する実装に書き換え
 - `MergeHistoryTrees` の子ノード探索ハッシュ化: O(C × obs²) → O(obs) になるが変更範囲が広いため保留。
 - サブツリーの Merkle ハッシュ化: `HistoryTreeEquals` が O(1) になるが実装コスト大。
 - `malloc`-per-node をアリーナアロケータに変更: 実装コスト小・ラウンド数が多い場合に高い効果が期待できる。
+
+---
+
+## 2026-05-04 — `observations` ソート + `FindRedEdge` 二分探索化
+
+**ファイル:** `src/history_tree.c`
+
+**問題:**  
+`FindRedEdge(h, target)` は `h->observations` を線形走査していた — O(obs)。`EquivalentNodes` 内で obs 回呼ばれるため、`EquivalentNodes` 全体で O(obs²) になる。
+
+**修正内容:**  
+`observations` を `o->history` ポインタ値で常にソートされた状態に保つ。
+- `FindRedEdge`: 二分探索に置き換え — O(log obs)。
+- `AddNewRedEdge`: 二分探索で挿入位置を決定し `InsertVector` でシフト — シフトは O(obs) だが挿入は探索より稀で、obs は n−1 以下なので実コストは小さい。
+- `AddRedEdge`: 変更なし（引き続き `FindRedEdge` → `AddNewRedEdge` を呼ぶ）。
+
+`EquivalentNodes` のコストが O(obs²) から O(obs log obs) に改善。
+
+**効果:**  
+本プロジェクトの研究用ネットワークでは obs ≤ n−1 で小さい（通常 n≤20）ため改善幅は限定的だが、obs が大きいネットワークでは漸近的に効果が大きくなる。
