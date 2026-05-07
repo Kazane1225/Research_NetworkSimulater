@@ -103,6 +103,8 @@
 
 ---
 
+## 2026-04-08 — `HistoryTreeContains`: 不要なツリーコピーを排除
+
 **ファイル:** `src/history_tree.c`
 
 **問題:**  
@@ -137,3 +139,56 @@ h1 を変更せずに直接 BFS で同型性を判定する実装に書き換え
 
 **効果:**  
 本プロジェクトの研究用ネットワークでは obs ≤ n−1 で小さい（通常 n≤20）ため改善幅は限定的だが、obs が大きいネットワークでは漸近的に効果が大きくなる。
+
+---
+
+## 2026-05-07 — `AppendAuxDataOneLevel`: インクリメンタル AuxData 更新
+
+**ファイル:** `src/auxdata.c`, `src/auxdata.h`, `src/network.c`
+
+**問題:**  
+`AppendLastRound` が `ComputeAuxData(finalHistory)` を呼び出し、全 AuxData レベルをゼロから再構築していた — 赤エッジ計算だけで O(R × n × obs)。`=` キーを押すたびに O(R) のコストがかかり、ラウンドを連続追加するほど重くなっていた。
+
+**修正内容:**  
+`AppendAuxDataOneLevel()` を新規追加。`ExtendFinalHistoryOneLevel` が `finalHistory` に 1 レベルだけ追加した後、以下を実行する:
+
+1. 新しい最深レベルの AuxData ノードのみ作成 — O(n)。
+2. 旧最深レベルからルートまで幅を下から再計算 — O(R × n)。
+3. 幅が変わったため全レベルの座標を再計算（不可避） — O(R × n)。
+4. **新レベルのみ**赤エッジを計算（`ComputeAuxDataRedEdges` と同じハッシュマップ方式） — O(R × n × obs) → O(n × obs)。
+5. 全レベルの匿名性を再計算 — O(R × n) — およびアルゴリズム状態をリセット。
+
+`AppendLastRound` は `ComputeAuxData(finalHistory)` の代わりに `AppendAuxDataOneLevel()` を呼ぶように変更。
+
+**効果:**  
+赤エッジ計算がラウンド追加ごとに O(R × n × obs) → O(n × obs) に削減。O(R × n) のパス（幅・座標・匿名性）は残るが、赤エッジ再構築に比べれば軽微。インタラクティブなラウンド追加が R の増加とともに重くなる問題を解消。
+
+---
+
+## 2026-05-07 — `ComputeHashBottomUp` の dead call 削除
+
+**ファイル:** `src/network.c`
+
+**問題:**  
+`RebuildFinalHistory` と `AppendLastRound` は `finalHistory` 構築後に `ComputeHashBottomUp(finalHistory)` を呼んでいた。`ComputeHashBottomUp` は O(R × n²)（後順 DFS、各ノードで子ハッシュをソート）。このハッシュを消費していたのは `HistoryTreeEquals` だが、`HistoryTreeEquals` はコードベース全体で一度も呼び出されていない。
+
+**修正内容:**  
+`ComputeHashBottomUp(finalHistory)` の呼び出し 2 箇所を削除。関数自体は残存（デバッグ用途に有用）、ただしホットパスからは除外。
+
+**効果:**  
+`RebuildFinalHistory` / `AppendLastRound` の呼び出しごとに O(R × n²) のパスを 1 回削除。R が大きいほど効果が大きい。
+
+---
+
+## 2026-05-07 — `CopyHistoryTree`: 直接 BFS コピー
+
+**ファイル:** `src/history_tree.c`
+
+**問題:**  
+`CopyHistoryTree` は `MergeHistoryTrees(dest, src)`（`dest` は常に空の新規ツリー）で実装されていた。`MergeHistoryTrees` は各 BFS ノードで既存の子ノードを検索するための `ChildEntry` ハッシュマップを確保する — しかし `dest` が空なので全検索はミスが確定しており、マップは即座に解放され、有益な処理は何も行われていない。
+
+**修正内容:**  
+`reference` フィールドを用いた直接 BFS コピーに書き換え（`MergeHistoryTrees` と同じ src→dst マッピング慣習）。赤エッジはレベル L からレベル L−1 を指す。BFS はレベル L−1 の後にレベル L を処理するため、赤エッジのターゲットは参照設定済みであり、1 パスで完結する。
+
+**効果:**  
+ソースツリーのノードごとに 1 回発生していた `calloc`/`free`（ハッシュマップ確保）を O(n) 回分削除。アルゴリズム的な計算量に変化はないが、ツリーコピー時のヒープオーバーヘッドをゼロにする。

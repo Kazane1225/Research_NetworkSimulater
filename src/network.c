@@ -112,9 +112,6 @@ static void RebuildFinalHistory(void){
         e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
     }
     ComputeAuxData(finalHistory);
-    /* Update Merkle hashes on each entity's individual history tree for HistoryTreeEquals short-circuit */
-    for(int i=0;i<network->entities->tot;i++)
-        ComputeHashBottomUp(GetEntity(i)->history);
 }
 
 /* Snapshot all entities' current states as "before the last round". */
@@ -266,9 +263,8 @@ void AppendLastRound(void){
     for(int i=0;i<n;i++) EndRound(GetEntity(i));
     /* Extend finalHistory by one level (O(n²), independent of R) */
     ExtendFinalHistoryOneLevel(prevFL,infos,counts);
-    /* Recompute render data and Merkle hashes */
-    ComputeAuxData(finalHistory);
-    for(int i=0;i<n;i++) ComputeHashBottomUp(GetEntity(i)->history);
+    /* Extend AuxData by one level — red edges only for new level: O(n×obs) instead of O(R×n×obs) */
+    AppendAuxDataOneLevel();
     /* Cleanup */
     for(int i=0;i<n;i++) free(infos[i]);
     free(infos); free(counts); free(prevFL);
@@ -778,6 +774,17 @@ EMSCRIPTEN_KEEPALIVE void TutorialLoadNetwork(void){
 EMSCRIPTEN_KEEPALIVE int GetRootGuess(void){
     if(!aux || aux->tot==0)return -1;
     return GetAuxData(0,0)->guess;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetNumGuessedNodes(void){
+    if(!aux || aux->tot==0)return 0;
+    int count=0;
+    for(int i=0;i<aux->tot;i++){
+        Vector *v=GetLevel(i);
+        for(int j=0;j<v->tot;j++)
+            if(((AuxData*)v->items[j])->guess!=-1)count++;
+    }
+    return count;
 }
 
 EMSCRIPTEN_KEEPALIVE int GetSelectedEntity(void){

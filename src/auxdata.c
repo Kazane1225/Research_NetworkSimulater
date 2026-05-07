@@ -126,6 +126,109 @@ void ComputeAuxData(HistoryTree *h){
     ResetAuxDataVariables();
 }
 
+/* Incrementally extend AuxData by exactly one level after ExtendFinalHistoryOneLevel()
+   has added one new deepest level to finalHistory.
+   Avoids rebuilding all R levels from scratch:
+     - AuxData nodes for levels 0..R-1 are reused (no free/realloc)
+     - Red-edge computation runs only for the new level: O(n×obs) instead of O(R×n×obs)
+     - Width, coordinate, and anonymity passes still touch all levels: O(R×n) unavoidably
+*/
+void AppendAuxDataOneLevel(void){
+    if(!aux)return; /* fall-through guard; caller should use ComputeAuxData instead */
+    SetWindowContext(win1);
+    int old_depth=aux->tot;    /* number of AuxData levels before this call */
+    int new_level=old_depth;   /* index of the level we are about to add */
+    AddVector(aux,NewVector(8));
+
+    /* Create AuxData nodes for every HistoryTree node at the new deepest level.
+       These are the children of nodes in GetLevel(old_depth-1) that were just
+       created by ExtendFinalHistoryOneLevel (h->data == NULL). */
+    Vector *old_deepest=GetLevel(old_depth-1);
+    for(int j=0;j<old_deepest->tot;j++){
+        AuxData *pdata=old_deepest->items[j];
+        HistoryTree *ph=pdata->h;
+        for(int k=0;k<ph->children->tot;k++){
+            HistoryTree *ch=ph->children->items[k];
+            if(ch->data!=NULL)continue; /* already handled (shared child from earlier entity) */
+            AuxData *cdata=malloc(sizeof(AuxData));
+            cdata->i=new_level;
+            cdata->j=AddVector(GetLevel(new_level),cdata);
+            ch->data=cdata;
+            cdata->h=ch;
+            cdata->parent=j;
+            cdata->children=NewVectorI(4);
+            cdata->observations=NewVectorI(4);
+            cdata->multiplicities=NewVectorI(4);
+            cdata->outdegree=ch->outdegree;
+            cdata->anonymity=0;
+            cdata->visible=false;
+            cdata->width=1; /* leaf */
+            cdata->guess=-1;
+            cdata->locked=false;
+            cdata->counted=false;
+            cdata->weight=0;
+            cdata->cumulativeAnonymity=0;
+            cdata->guesser=false;
+            AddVectorI(pdata->children,cdata->j); /* link parent → new child */
+        }
+    }
+
+    /* Recompute widths bottom-up from old deepest level to root.
+       Only nodes whose children changed (level old_depth-1) and their ancestors
+       are affected; iterating all levels in that range is simplest and correct. */
+    for(int i=old_depth-1;i>=0;i--){
+        Vector *v=GetLevel(i);
+        for(int j=0;j<v->tot;j++){
+            AuxData *data=v->items[j];
+            if(!data->children->tot){data->width=1;continue;}
+            data->width=0;
+            for(int k=0;k<data->children->tot;k++)
+                data->width+=GetAuxData(i+1,data->children->items[k])->width;
+        }
+    }
+
+    /* Recompute coordinates for all levels (widths changed, layout must be consistent). */
+    ComputeAuxDataCoordinates(0,0,-1.0f,-1.0f,1.0f,1.0f);
+
+    /* Compute red edges for the new level only (O(n×obs) vs O(R×n×obs) full rebuild). */
+    {
+        int i=new_level;
+        int pn=GetLevel(i-1)->tot;
+        int cap=pn*2+3;
+        HistoryTree **hkeys=calloc(cap,sizeof(HistoryTree*));
+        int *hvals=malloc(cap*sizeof(int));
+        for(int k=0;k<pn;k++){
+            HistoryTree *h=GetAuxData(i-1,k)->h;
+            int idx=(int)((uintptr_t)h%(unsigned)cap);
+            while(hkeys[idx]&&hkeys[idx]!=h){if(++idx==cap)idx=0;}
+            hkeys[idx]=h; hvals[idx]=k;
+        }
+        for(int j=0;j<GetLevel(i)->tot;j++){
+            AuxData *data=GetAuxData(i,j);
+            for(int l=0;l<data->h->observations->tot;l++){
+                Observation *obs=data->h->observations->items[l];
+                int idx=(int)((uintptr_t)obs->history%(unsigned)cap);
+                while(hkeys[idx]&&hkeys[idx]!=obs->history){if(++idx==cap)idx=0;}
+                if(hkeys[idx]==obs->history){
+                    AddVectorI(data->observations,hvals[idx]);
+                    AddVectorI(data->multiplicities,obs->multiplicity);
+                }
+            }
+        }
+        free(hkeys); free(hvals);
+    }
+
+    /* Recompute anonymities: zero all first, then propagate from leaves. */
+    for(int i=0;i<aux->tot;i++){
+        Vector *v=GetLevel(i);
+        for(int j=0;j<v->tot;j++)((AuxData*)v->items[j])->anonymity=0;
+    }
+    ComputeAuxDataAnonymities();
+
+    /* Reset algorithm state for all nodes (same behaviour as full ComputeAuxData). */
+    ResetAuxDataVariables();
+}
+
 void FreeAuxData(void){
     if(!aux)return;
     SetWindowContext(win1);

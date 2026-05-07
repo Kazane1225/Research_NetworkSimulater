@@ -141,3 +141,56 @@ This turns two O(n) heap allocations + copies into zero allocations per call.
 - Child-lookup hash in `MergeHistoryTrees` inner loop: would reduce O(C × obs²) to O(obs), but requires more invasive changes. Deferred.
 - Merkle hash on subtrees: would make `HistoryTreeEquals` O(1) but high implementation cost.
 - Arena allocator for `malloc`-per-node: low implementation cost, high gain for large round counts.
+
+---
+
+## 2026-05-07 — `AppendAuxDataOneLevel`: incremental AuxData update
+
+**File:** `src/auxdata.c`, `src/auxdata.h`, `src/network.c`
+
+**Problem:**  
+`AppendLastRound` called `ComputeAuxData(finalHistory)`, which rebuilt all AuxData levels from scratch — O(R × n × obs) for red edges alone. Each `=` keypress was O(R), so appending rounds repeatedly grew progressively slower.
+
+**Fix:**  
+Added `AppendAuxDataOneLevel()`. After `ExtendFinalHistoryOneLevel` adds exactly one new level to `finalHistory`, this function:
+
+1. Creates AuxData nodes for only the new deepest level (O(n)).
+2. Recomputes widths bottom-up from the old deepest level to root (O(R × n)).
+3. Recomputes coordinates for all levels — unavoidable since widths changed (O(R × n)).
+4. Computes red edges **for the new level only**, using the same hash-map lookup as `ComputeAuxDataRedEdges` — O(n × obs) instead of O(R × n × obs).
+5. Recomputes anonymities for all levels (O(R × n)) and resets algorithm state.
+
+`AppendLastRound` now calls `AppendAuxDataOneLevel()` instead of `ComputeAuxData(finalHistory)`.
+
+**Gain:**  
+Red-edge computation drops from O(R × n × obs) to O(n × obs) per append. The O(R × n) passes (width, coordinate, anonymity) remain but are cheap compared to the red-edge rebuild. Interactive round-append no longer slows down as R grows.
+
+---
+
+## 2026-05-07 — Remove dead `ComputeHashBottomUp` calls
+
+**File:** `src/network.c`
+
+**Problem:**  
+`RebuildFinalHistory` and `AppendLastRound` each called `ComputeHashBottomUp(finalHistory)` after building `finalHistory`. `ComputeHashBottomUp` is O(R × n²) (post-order DFS, sorts children at each node). The only consumer of these hashes was `HistoryTreeEquals`, which is never called anywhere in the codebase.
+
+**Fix:**  
+Removed both `ComputeHashBottomUp(finalHistory)` calls. `ComputeHashBottomUp` itself is kept (it may be useful for debugging), but is no longer invoked on hot paths.
+
+**Gain:**  
+Eliminates one O(R × n²) pass per `RebuildFinalHistory` / `AppendLastRound` call — a significant saving at high R.
+
+---
+
+## 2026-05-07 — `CopyHistoryTree`: direct BFS copy
+
+**File:** `src/history_tree.c`
+
+**Problem:**  
+`CopyHistoryTree` was implemented via `MergeHistoryTrees(dest, src)` where `dest` was always a freshly allocated empty tree. `MergeHistoryTrees` allocated a `ChildEntry` hash map for each BFS node of `dest` to look up existing children — but since `dest` was empty, every lookup was a guaranteed miss and every map was immediately freed after zero useful work.
+
+**Fix:**  
+Replaced with a direct BFS copy that uses the `reference` field (same convention as `MergeHistoryTrees`) for src→dst mapping. Red edges point from level L to level L−1; BFS processes level L−1 before level L, so all red-edge targets already have their `reference` set when we need them — a single pass suffices.
+
+**Gain:**  
+Eliminates O(n) `calloc`/`free` calls (one hash-map allocation per node in the source tree). No algorithmic complexity change, but removes all per-node heap overhead for tree copies.

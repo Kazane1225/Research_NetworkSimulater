@@ -208,10 +208,43 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
 }
 
 HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest){ // returns copied tree and deepest node
-    HistoryTree *h2=NewHistoryTree();
-    HistoryTree *au=MergeHistoryTrees(h2,h,NULL);
+    /* Direct BFS copy — destination is always empty so cmap lookups in MergeHistoryTrees
+       would all be misses.  Using reference fields for src→dst mapping (same convention
+       as MergeHistoryTrees); cleaned up by ResetReferences at the end.
+       Red edges at level L point to level L-1, which BFS has already mapped, so a single
+       pass suffices. */
+    HistoryTree *root=NewHistoryTree();
+    HistoryTree *au=root; /* deepest dst node seen so far */
+    Queue *q=NewQueue();
+    h->reference=root;
+    AppendQueue(q,h);
+    while(!IsQueueEmpty(q)){
+        HistoryTree *src=PopQueue(q);
+        HistoryTree *dst=src->reference;
+        dst->input=src->input;
+        dst->level=src->level;
+        dst->outdegree=src->outdegree;
+        dst->hash=src->hash;
+        if(dst->level>au->level)au=dst;
+        /* Copy red edges — targets are at level-1 and already have references set */
+        for(int i=0;i<src->observations->tot;i++){
+            Observation *o=src->observations->items[i];
+            AddNewRedEdge(dst,o->history->reference,o->multiplicity);
+        }
+        /* Create and link child nodes */
+        for(int i=0;i<src->children->tot;i++){
+            HistoryTree *sc=src->children->items[i];
+            HistoryTree *dc=NewHistoryTree();
+            dc->parent=dst;
+            AddVector(dst->children,dc);
+            sc->reference=dc;
+            AppendQueue(q,sc);
+        }
+    }
+    FreeQueue(q);
+    ResetReferences(h);
     if(deepest)*deepest=au;
-    return h2;
+    return root;
 }
 
 bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2){ // does h1 contain an isomorphic copy of h2?
