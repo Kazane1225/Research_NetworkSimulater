@@ -75,6 +75,46 @@
 
 ---
 
+## 2026-05-20 — middle insert 向けの checkpoint + suffix replay 最適化
+
+**ファイル:** `src/network.c`, `src/network.h`, `src/events.c`
+
+**問題:**  
+既存の最適化は、`+` が末尾ラウンド追加になるケース（`AppendLastRound`）だけを改善していた。カーソルがタイムライン途中にある状態で `+` を押すと、実際には `currentRound + 1` に新しいラウンドが挿入されるため、それ以降の全ラウンドが影響を受ける。この middle insert 経路は従来どおり `ExecuteNetwork()` にフォールバックしており、round 0 から全再実行していた。
+
+この違いはベンチマーク上でも重要で、round 1 付近で `+` を連打して得た遅い数値は、末尾追加最適化の失敗ではなく、middle insert を測っていたことが原因だった。
+
+**修正内容:**  
+定期 checkpoint と suffix replay を追加した。
+
+1. `ExecuteNetwork()` 実行中に、round 1 の直後と、その後は 8 ラウンドごとに checkpoint を保存。
+2. checkpoint には、各 entity の `history`・`current`・`outdegree` を保持。
+3. `ExecuteNetworkFromRound(firstRound)` を追加し、`firstRound` 以下で最も近い checkpoint を復元してから、影響を受ける suffix だけを再実行するようにした。
+4. `events.c` では、middle の `+` 挿入と middle の `-` 削除が `ExecuteNetwork()` ではなく `ExecuteNetworkFromRound(currentRound)` を呼ぶよう変更した。
+
+末尾の挙動はそのまま維持している:
+- 最終ラウンドへの追加は引き続き `AppendLastRound()`
+- 最終ラウンド削除は引き続き `RollBackLastRound()`
+
+**実測結果:**
+
+- Tutorial network で round 1 付近から `+` を連打し、合計 250 ラウンドに到達するケース:
+- 修正前: 約 `22.1 s`
+- 修正後: `2.532 s`
+- 平均: `10.34 ms/click`
+- p95: `21.60 ms`
+
+- checkpoint 導入後に、末尾追加も再確認:
+- タイムライン末尾で `5 -> 250` まで `245` 回 append
+- 総時間: `1.115 s`
+- 平均: `4.55 ms/click`
+- p95: `6.23 ms`
+
+**効果:**  
+middle insert / middle delete が毎回 round 0 からのフル再実行を行わなくなり、変化のない prefix を再利用して suffix だけを再計算するようになった。append-at-end ほど安くはならないが、タイムライン途中での編集時に支配的だった最悪ケースを大きく削減できた。
+
+---
+
 ## 2026-05-04 — `AppendLastRound` O(n²) インクリメンタル finalHistory 拡張
 
 **ファイル:** `src/network.c`, `src/entity.c`, `src/history_tree.h`, `src/history_tree.c`

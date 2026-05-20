@@ -73,6 +73,46 @@ Measure how interactive round-appends behave at large round counts, and verify w
 
 ---
 
+## 2026-05-20 — Middle-Insert Replay From Round Checkpoints
+
+**File:** `src/network.c`, `src/network.h`, `src/events.c`
+
+**Problem:**  
+The existing optimization only improved the case where `+` appends a new round at the end (`AppendLastRound`). If the user is positioned in the middle of the timeline, `+` inserts a round at `currentRound + 1`, which invalidates all later rounds. That path still fell back to `ExecuteNetwork()`, rebuilding the entire network from round 0.
+
+This distinction mattered in benchmarking: a slow measurement taken while the cursor was near round 1 was not exercising the append-at-end optimization at all. It was measuring repeated middle inserts.
+
+**Fix:**  
+Added periodic round checkpoints and a suffix-replay path:
+
+1. During `ExecuteNetwork()`, capture a checkpoint after round 1 and every 8 rounds thereafter.
+2. Each checkpoint stores every entity's `history`, `current`, and `outdegree` at that prefix length.
+3. Added `ExecuteNetworkFromRound(firstRound)`, which restores the nearest checkpoint at or before `firstRound`, trims invalid future checkpoints, and replays only the affected suffix.
+4. In `events.c`, middle `+` insert and middle `-` delete now call `ExecuteNetworkFromRound(currentRound)` instead of full `ExecuteNetwork()`.
+
+End-of-sequence append/delete behavior is unchanged:
+- last-round append still uses `AppendLastRound()`
+- last-round delete still uses `RollBackLastRound()`
+
+**Measured effect:**
+
+- Tutorial network, starting near round 1, repeated `+` until total rounds reached 250:
+- before this change: about `22.1 s`
+- after this change: `2.532 s`
+- average: `10.34 ms/click`
+- p95: `21.60 ms`
+
+- End-of-sequence append benchmark was rechecked after the checkpoint work:
+- `245` appends from round `5 -> 250` at the end of the timeline
+- total: `1.115 s`
+- average: `4.55 ms/click`
+- p95: `6.23 ms`
+
+**Gain:**  
+Middle insert/delete no longer always pay the full cost of replaying from round 0. They now reuse the unchanged prefix and replay only the suffix from the nearest checkpoint. This does not make middle insert as cheap as append-at-end, but it removes the worst-case behavior that previously dominated interactive use away from the last round.
+
+---
+
 ## 2026-05-04 — `AppendLastRound` O(n²) incremental finalHistory extension
 
 **File:** `src/network.c`, `src/entity.c`, `src/history_tree.h`, `src/history_tree.c`

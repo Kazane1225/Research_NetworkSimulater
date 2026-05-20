@@ -180,7 +180,7 @@ static void KeyPressed(SDL_Keycode key){
                 InsertRound(++currentRound,true);
                 if(selectedNodeI!=-1)selectedNodeI++;
                 if(currentRound==network->rounds->tot-1)AppendLastRound();
-                else ExecuteNetwork();
+                else ExecuteNetworkFromRound(currentRound);
                 if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
                 CountingAlgorithm();
@@ -198,7 +198,7 @@ static void KeyPressed(SDL_Keycode key){
                     if(selectedNodeI!=-1)selectedNodeI--;
                     RollBackLastRound();
                 }
-                else ExecuteNetwork();
+                else ExecuteNetworkFromRound(currentRound);
                 if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
                 CountingAlgorithm();

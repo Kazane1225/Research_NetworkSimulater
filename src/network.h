@@ -23,6 +23,7 @@ int GetEntityIndex(Entity *e);
 void SortLeaders(void); // put all leaders at the beginning of the list of entities
 void InitNetwork(int type,int n);
 void ExecuteNetwork(void);
+void ExecuteNetworkFromRound(int firstRound); // restore nearest checkpoint and replay suffix from firstRound
 void ReExecuteLastRound(void); // re-execute only the last round using saved snapshots
 void RollBackLastRound(void);  // restore to pre-last-round state after last round was deleted
 void AppendLastRound(void);    // apply newly appended last round on top of current entity states

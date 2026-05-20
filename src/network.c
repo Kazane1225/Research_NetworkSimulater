@@ -10,6 +10,55 @@ bool draggingEntity=false;
 int algorithm=0;
 int numSteps=-1;
 
+typedef struct {
+    int prefixRounds;
+    int numEntities;
+    EntitySnapshot *states;
+} RoundCheckpoint;
+
+typedef struct {
+    double lastSnapshotMs;
+    double lastExecuteMs;
+    double lastFinalHistoryMs;
+    double lastAuxMs;
+    double lastTotalMs;
+    double sumSnapshotMs;
+    double sumExecuteMs;
+    double sumFinalHistoryMs;
+    double sumAuxMs;
+    double sumTotalMs;
+    int samples;
+} AppendPerfStats;
+
+static AppendPerfStats appendPerfStats={0};
+static Vector *roundCheckpoints=NULL;
+
+enum { ROUND_CHECKPOINT_INTERVAL = 8 };
+
+static double PerfNowMs(void){
+    static double freq=0.0;
+    if(freq==0.0)freq=(double)SDL_GetPerformanceFrequency();
+    return 1000.0*(double)SDL_GetPerformanceCounter()/freq;
+}
+
+static void ResetAppendPerfStats(void){
+    appendPerfStats=(AppendPerfStats){0};
+}
+
+static void RecordAppendPerf(double snapshotMs,double executeMs,double finalHistoryMs,double auxMs,double totalMs){
+    appendPerfStats.lastSnapshotMs=snapshotMs;
+    appendPerfStats.lastExecuteMs=executeMs;
+    appendPerfStats.lastFinalHistoryMs=finalHistoryMs;
+    appendPerfStats.lastAuxMs=auxMs;
+    appendPerfStats.lastTotalMs=totalMs;
+    appendPerfStats.sumSnapshotMs+=snapshotMs;
+    appendPerfStats.sumExecuteMs+=executeMs;
+    appendPerfStats.sumFinalHistoryMs+=finalHistoryMs;
+    appendPerfStats.sumAuxMs+=auxMs;
+    appendPerfStats.sumTotalMs+=totalMs;
+    appendPerfStats.samples++;
+}
+
 Entity *GetEntity(int i){
     return network->entities->items[i];
 }
@@ -104,6 +153,126 @@ static HistoryTree *FindCurrentInCopy(HistoryTree *orig_root,HistoryTree *orig_c
     return n;
 }
 
+static void ClearEntityMailbox(Entity *e){
+    for(int j=0;j<e->mailbox->tot;j++){
+        Observation *m=e->mailbox->items[j];
+        FreeHistoryTree(m->history);
+        free(m);
+    }
+    FreeVector(e->mailbox);
+    e->mailbox=NewVector(4);
+}
+
+static void FreeEntitySnap(Entity *e){
+    if(e->snap){
+        FreeHistoryTree(e->snap->history);
+        free(e->snap);
+        e->snap=NULL;
+    }
+}
+
+static void FreeRoundCheckpoint(RoundCheckpoint *cp){
+    if(!cp)return;
+    for(int i=0;i<cp->numEntities;i++)
+        FreeHistoryTree(cp->states[i].history);
+    free(cp->states);
+    free(cp);
+}
+
+static void FreeRoundCheckpoints(void){
+    if(!roundCheckpoints)return;
+    for(int i=0;i<roundCheckpoints->tot;i++)
+        FreeRoundCheckpoint(roundCheckpoints->items[i]);
+    FreeVector(roundCheckpoints);
+    roundCheckpoints=NULL;
+}
+
+static bool HasRoundCheckpoint(int prefixRounds){
+    if(!roundCheckpoints)return false;
+    for(int i=0;i<roundCheckpoints->tot;i++){
+        RoundCheckpoint *cp=roundCheckpoints->items[i];
+        if(cp->prefixRounds==prefixRounds)return true;
+    }
+    return false;
+}
+
+static RoundCheckpoint *CaptureRoundCheckpoint(int prefixRounds){
+    int n=network->entities->tot;
+    RoundCheckpoint *cp=malloc(sizeof(RoundCheckpoint));
+    cp->prefixRounds=prefixRounds;
+    cp->numEntities=n;
+    cp->states=calloc((size_t)n,sizeof(EntitySnapshot));
+    for(int i=0;i<n;i++){
+        Entity *e=GetEntity(i);
+        cp->states[i].history=CopyHistoryTree(e->history,NULL);
+        cp->states[i].current=FindCurrentInCopy(e->history,e->current,cp->states[i].history);
+        cp->states[i].outdegree=e->outdegree;
+    }
+    return cp;
+}
+
+static void MaybeCaptureRoundCheckpoint(int prefixRounds){
+    if(prefixRounds<=0 || prefixRounds>=network->rounds->tot)return;
+    if(prefixRounds!=1 && prefixRounds%ROUND_CHECKPOINT_INTERVAL!=0)return;
+    if(!roundCheckpoints)roundCheckpoints=NewVector(8);
+    if(HasRoundCheckpoint(prefixRounds))return;
+    AddVector(roundCheckpoints,CaptureRoundCheckpoint(prefixRounds));
+}
+
+static RoundCheckpoint *FindRoundCheckpoint(int firstRound){
+    RoundCheckpoint *best=NULL;
+    if(!roundCheckpoints)return NULL;
+    for(int i=0;i<roundCheckpoints->tot;i++){
+        RoundCheckpoint *cp=roundCheckpoints->items[i];
+        if(cp->prefixRounds>firstRound)continue;
+        if(!best || cp->prefixRounds>best->prefixRounds)best=cp;
+    }
+    return best;
+}
+
+static void TrimRoundCheckpointsAfter(int prefixRounds){
+    if(!roundCheckpoints)return;
+    Vector *kept=NewVector(8);
+    for(int i=0;i<roundCheckpoints->tot;i++){
+        RoundCheckpoint *cp=roundCheckpoints->items[i];
+        if(cp->prefixRounds<=prefixRounds)AddVector(kept,cp);
+        else FreeRoundCheckpoint(cp);
+    }
+    FreeVector(roundCheckpoints);
+    roundCheckpoints=kept;
+}
+
+static bool RestoreRoundCheckpoint(RoundCheckpoint *cp){
+    if(!cp || cp->numEntities!=network->entities->tot)return false;
+    for(int i=0;i<cp->numEntities;i++){
+        Entity *e=GetEntity(i);
+        if(e->history)FreeHistoryTree(e->history);
+        ClearEntityMailbox(e);
+        FreeEntitySnap(e);
+        e->history=CopyHistoryTree(cp->states[i].history,NULL);
+        e->current=FindCurrentInCopy(cp->states[i].history,cp->states[i].current,e->history);
+        e->outdegree=cp->states[i].outdegree;
+        e->finalLeaf=NULL;
+    }
+    return true;
+}
+
+static void RebuildFinalHistory(void);
+static void TakeSnapshotsBeforeRound(void);
+static void ReplayRoundsFrom(int firstRound){
+    int R=network->rounds->tot;
+    for(int r=firstRound;r<R;r++){
+        if(r==R-1)TakeSnapshotsBeforeRound();
+        Vector *v=network->rounds->items[r];
+        for(int i=0;i<v->tot;i++)
+            ExecuteInteraction(v->items[i]);
+        for(int i=0;i<network->entities->tot;i++)
+            EndRound(GetEntity(i));
+        MaybeCaptureRoundCheckpoint(r+1);
+    }
+    RebuildFinalHistory();
+}
+
 static void RebuildFinalHistory(void){
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
@@ -118,7 +287,7 @@ static void RebuildFinalHistory(void){
 static void TakeSnapshotsBeforeRound(void){
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
-        if(e->snap){FreeHistoryTree(e->snap->history);free(e->snap);}
+        FreeEntitySnap(e);
         e->snap=malloc(sizeof(EntitySnapshot));
         e->snap->history=CopyHistoryTree(e->history,NULL);
         e->snap->current=FindCurrentInCopy(e->history,e->current,e->snap->history);
@@ -131,8 +300,7 @@ static void RestoreFromSnapshots(void){
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
         FreeHistoryTree(e->history);
-        for(int j=0;j<e->mailbox->tot;j++){Observation *m=e->mailbox->items[j];FreeHistoryTree(m->history);free(m);}
-        FreeVector(e->mailbox);e->mailbox=NewVector(4);
+        ClearEntityMailbox(e);
         /* Take ownership of snap tree directly (no copy needed for RollBack) */
         e->history=e->snap->history;
         e->current=e->snap->current;
@@ -146,8 +314,7 @@ static void RestoreFromSnapshotsCopy(void){
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
         FreeHistoryTree(e->history);
-        for(int j=0;j<e->mailbox->tot;j++){Observation *m=e->mailbox->items[j];FreeHistoryTree(m->history);free(m);}
-        FreeVector(e->mailbox);e->mailbox=NewVector(4);
+        ClearEntityMailbox(e);
         HistoryTree *h=CopyHistoryTree(e->snap->history,NULL);
         e->current=FindCurrentInCopy(e->snap->history,e->snap->current,h);
         e->history=h;
@@ -179,7 +346,7 @@ void ReExecuteLastRound(void){
    Snap is consumed (invalidated) because it no longer describes the new last round. */
 void RollBackLastRound(void){
     if(!SnapshotsValid()){ExecuteNetwork();return;}
-    RestoreFromSnapshots(); /* consumes snap → snap=NULL */
+    RestoreFromSnapshots(); /* consumes snap ↁEsnap=NULL */
     RebuildFinalHistory();
 }
 
@@ -226,11 +393,13 @@ static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int 
 }
 
 /* Append the newly added last round on top of the current (already up-to-date) entity states.
-   Extends finalHistory by exactly one level — O(n²) instead of O(R×n³) full rebuild.
+   Extends finalHistory by exactly one level  EO(n²) instead of O(R×n³) full rebuild.
    Called after InsertRound() appended a round at the end. */
 void AppendLastRound(void){
     int n=network->entities->tot;
+    double totalStart=PerfNowMs();
     TakeSnapshotsBeforeRound(); /* save pre-round entity states for ReExecuteLastRound */
+    double afterSnapshot=PerfNowMs();
     /* Save each entity's current finalLeaf (level R-1 node in finalHistory) */
     HistoryTree **prevFL=malloc(n*sizeof(HistoryTree*));
     for(int i=0;i<n;i++) prevFL[i]=GetEntity(i)->finalLeaf;
@@ -261,20 +430,32 @@ void AppendLastRound(void){
     }
     /* Run EndRound for all entities */
     for(int i=0;i<n;i++) EndRound(GetEntity(i));
+    double afterExecute=PerfNowMs();
     /* Extend finalHistory by one level (O(n²), independent of R) */
     ExtendFinalHistoryOneLevel(prevFL,infos,counts);
-    /* Extend AuxData by one level — red edges only for new level: O(n×obs) instead of O(R×n×obs) */
+    double afterFinalHistory=PerfNowMs();
+    /* Extend AuxData by one level  Ered edges only for new level: O(n×obs) instead of O(R×n×obs) */
     AppendAuxDataOneLevel();
+    double afterAux=PerfNowMs();
+    RecordAppendPerf(
+        afterSnapshot-totalStart,
+        afterExecute-afterSnapshot,
+        afterFinalHistory-afterExecute,
+        afterAux-afterFinalHistory,
+        afterAux-totalStart
+    );
     /* Cleanup */
     for(int i=0;i<n;i++) free(infos[i]);
     free(infos); free(counts); free(prevFL);
 }
 
 void ExecuteNetwork(void){
+    FreeRoundCheckpoints();
+    roundCheckpoints=NewVector(8);
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
         if(e->history)FreeHistoryTree(e->history);
-        if(e->snap){FreeHistoryTree(e->snap->history);free(e->snap);e->snap=NULL;}
+        FreeEntitySnap(e);
         e->outdegree=outAware?0:-1;
         e->current=e->history=NewHistoryTree();
         ExtendHistory(e);
@@ -287,12 +468,23 @@ void ExecuteNetwork(void){
             ExecuteInteraction(v->items[i]);
         for(int i=0;i<network->entities->tot;i++)
             EndRound(GetEntity(i));
+        MaybeCaptureRoundCheckpoint(r+1);
     }
     RebuildFinalHistory();
 }
 
+void ExecuteNetworkFromRound(int firstRound){
+    RoundCheckpoint *cp;
+    if(firstRound<=0){ExecuteNetwork();return;}
+    cp=FindRoundCheckpoint(firstRound);
+    if(!RestoreRoundCheckpoint(cp)){ExecuteNetwork();return;}
+    TrimRoundCheckpointsAfter(firstRound);
+    ReplayRoundsFrom(cp->prefixRounds);
+}
+
 void DoneNetwork(void){
     if(!network)return;
+    FreeRoundCheckpoints();
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NULL;
@@ -676,6 +868,54 @@ EMSCRIPTEN_KEEPALIVE int GetNumLeaders(void){
 
 EMSCRIPTEN_KEEPALIVE int GetNumRounds(void){
     return network ? network->rounds->tot : 0;
+}
+
+EMSCRIPTEN_KEEPALIVE void ResetAppendPerfMetrics(void){
+    ResetAppendPerfStats();
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendSnapshotMs(void){
+    return appendPerfStats.lastSnapshotMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendExecuteMs(void){
+    return appendPerfStats.lastExecuteMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendFinalHistoryMs(void){
+    return appendPerfStats.lastFinalHistoryMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendAuxMs(void){
+    return appendPerfStats.lastAuxMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendTotalMs(void){
+    return appendPerfStats.lastTotalMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendSnapshotMs(void){
+    return appendPerfStats.sumSnapshotMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendExecuteMs(void){
+    return appendPerfStats.sumExecuteMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendFinalHistoryMs(void){
+    return appendPerfStats.sumFinalHistoryMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendAuxMs(void){
+    return appendPerfStats.sumAuxMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendTotalMs(void){
+    return appendPerfStats.sumTotalMs;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAppendPerfSamples(void){
+    return appendPerfStats.samples;
 }
 
 EMSCRIPTEN_KEEPALIVE int GetCurrentRound(void){
