@@ -1,5 +1,78 @@
 # Optimization Log
 
+## 2026-05-20 — Round-Append Benchmark (`current` vs `main`)
+
+**Goal:**  
+Measure how interactive round-appends behave at large round counts, and verify whether the reported “UI starts stuttering around 200+ rounds” effect is visible in actual timing data. Compare the current branch against `main` under the same conditions.
+
+**Environment:**
+- OS: Windows
+- Runtime: VS Code integrated browser
+- User-Agent: `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Code/1.120.0 Chrome/142.0.7444.265 Electron/39.8.8 Safari/537.36`
+- Logical cores: 10
+- Viewport: `1812 x 942`
+
+**Branches measured:**
+- current: `feature/improve_algorithm`
+- baseline: `main` (measured in a separate worktree at `C:\myproject\Research_NetworkSimulater_main`)
+
+**Test setup:**
+- Use `Module._TutorialLoadNetwork()`
+- Agent count: 6
+- Initial round count after tutorial load: 5
+- Before each benchmark, move to the last round and delete rounds until only 1 round remains
+- Then append rounds from `1 -> 250`
+
+**How the benchmark was driven:**
+- DOM buttons `btn-add-round`, `btn-del-round`, `btn-next-round`, `btn-prev-round` were triggered from Playwright
+- For each `+` click, wait until `Module._GetNumRounds()` increments, then wait one `requestAnimationFrame`
+- Aggregate timings per 25-round segment
+- To avoid background-tab throttling, both current and `main` were measured sequentially in the **same foreground browser tab**, switching between `http://localhost:8000/` and `http://localhost:8001/`
+
+**Meaning of “done” for each append:**
+- This benchmark targets rapid append responsiveness, not full visual settling time
+- Each append is considered complete when:
+	1. the round count has increased, and
+	2. one subsequent frame has been rendered
+
+**Summary results:**
+
+| Metric | current | `main` |
+|---|---:|---:|
+| Total time, 1 -> 250 | 1.296 s | 16.162 s |
+| Average over all clicks | 4.9 ms/click | 64.6 ms/click |
+| Average over first 50 clicks | 4.2 ms/click | 4.9 ms/click |
+| Average over clicks after 200 | 6.5 ms/click | 155.9 ms/click |
+| Max click time | 10.9 ms | 195.6 ms |
+| 95th percentile | 7.5 ms | 173.4 ms |
+
+**Time per 25-round segment:**
+
+| Segment | current | `main` |
+|---|---:|---:|
+| 1 -> 25 | 100.3 ms | 100.3 ms |
+| 25 -> 50 | 104.4 ms | 134.6 ms |
+| 50 -> 75 | 104.3 ms | 326.9 ms |
+| 75 -> 100 | 104.4 ms | 603.3 ms |
+| 100 -> 125 | 104.4 ms | 974.1 ms |
+| 125 -> 150 | 109.0 ms | 1445.8 ms |
+| 150 -> 175 | 121.2 ms | 2027.9 ms |
+| 175 -> 200 | 141.2 ms | 2677.3 ms |
+| 200 -> 225 | 162.0 ms | 3473.9 ms |
+| 225 -> 250 | 164.2 ms | 4319.3 ms |
+
+**Observations:**
+- The current branch still gets somewhat slower after 200 rounds, but the increase is mild: segment time rises from roughly 100–120 ms up to about 141–164 ms.
+- In `main`, slowdown starts much earlier and grows aggressively. Beyond 200 rounds, each 25-round block takes 2.7–4.3 seconds.
+- The reported “UI starts catching/stuttering around 200+ rounds” is consistent with `main` timings. The current branch reduces that effect substantially.
+
+**Conclusion:**
+- For repeated end-of-sequence round appends, the current branch is about **12.5x faster** overall than `main`.
+- In the 200+ round region specifically, current averages 6.5 ms/click while `main` averages 155.9 ms/click, a gap of roughly **24x**.
+- The implemented incremental update path removes the dominant source of high-round-count append slowdown seen in `main`.
+
+---
+
 ## 2026-05-04 — `AppendLastRound` O(n²) incremental finalHistory extension
 
 **File:** `src/network.c`, `src/entity.c`, `src/history_tree.h`, `src/history_tree.c`
