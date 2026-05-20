@@ -104,6 +104,15 @@
 - 平均: `10.34 ms/click`
 - p95: `21.60 ms`
 
+- 同条件の middle insert（`TutorialLoadNetwork()` 直後、round 1 付近から `+` を `245` 回）で current と `main` を再比較:
+
+| 指標 | current | `main` |
+|---|---:|---:|
+| 総時間 | `2.532 s` | `16.926 s` |
+| 平均 | `10.34 ms/click` | `69.09 ms/click` |
+| p95 | `21.60 ms` | `181.95 ms` |
+| 最大 | `23.67 ms` | `203.17 ms` |
+
 - checkpoint 導入後に、末尾追加も再確認:
 - タイムライン末尾で `5 -> 250` まで `245` 回 append
 - 総時間: `1.115 s`
@@ -112,6 +121,7 @@
 
 **効果:**  
 middle insert / middle delete が毎回 round 0 からのフル再実行を行わなくなり、変化のない prefix を再利用して suffix だけを再計算するようになった。append-at-end ほど安くはならないが、タイムライン途中での編集時に支配的だった最悪ケースを大きく削減できた。
+同じ middle insert ベンチでは、最適化後の current は `main` より**約 6.7 倍高速**だった。
 
 ---
 

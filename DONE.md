@@ -102,6 +102,15 @@ End-of-sequence append/delete behavior is unchanged:
 - average: `10.34 ms/click`
 - p95: `21.60 ms`
 
+- Fresh `current` vs `main` comparison under the same middle-insert condition (`TutorialLoadNetwork()`, start near round 1, `245` presses of `+`):
+
+| Metric | current | `main` |
+|---|---:|---:|
+| Total time | `2.532 s` | `16.926 s` |
+| Average | `10.34 ms/click` | `69.09 ms/click` |
+| p95 | `21.60 ms` | `181.95 ms` |
+| Max | `23.67 ms` | `203.17 ms` |
+
 - End-of-sequence append benchmark was rechecked after the checkpoint work:
 - `245` appends from round `5 -> 250` at the end of the timeline
 - total: `1.115 s`
@@ -110,6 +119,7 @@ End-of-sequence append/delete behavior is unchanged:
 
 **Gain:**  
 Middle insert/delete no longer always pay the full cost of replaying from round 0. They now reuse the unchanged prefix and replay only the suffix from the nearest checkpoint. This does not make middle insert as cheap as append-at-end, but it removes the worst-case behavior that previously dominated interactive use away from the last round.
+Under the same middle-insert benchmark, the optimized current branch is about **6.7x faster** than `main` overall.
 
 ---
 
