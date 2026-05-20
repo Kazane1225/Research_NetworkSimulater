@@ -128,16 +128,79 @@ window.addEventListener('keydown', e => {
 }, true);
 
 // ── Toolbar button → key mappings ─────────────────────────────
-document.getElementById('btn-prev-round')  .addEventListener('click', () => pressKey('ArrowUp',    'ArrowUp'));
-document.getElementById('btn-next-round')  .addEventListener('click', () => pressKey('ArrowDown',  'ArrowDown'));
-document.getElementById('btn-add-round')   .addEventListener('click', () => pressKey('+',          'Equal'));
-document.getElementById('btn-del-round')   .addEventListener('click', () => pressKey('-',          'Minus'));
-document.getElementById('btn-clear-round') .addEventListener('click', () => pressKey('Backspace',  'Backspace'));
-document.getElementById('btn-step')        .addEventListener('click', () => pressKey(' ',          'Space'));
-document.getElementById('btn-delete-agent').addEventListener('click', () => pressKey('Delete',     'Delete'));
-document.getElementById('btn-deselect')    .addEventListener('click', () => pressKey('Escape',     'Escape'));
-document.getElementById('btn-load')        .addEventListener('click', () => pressKey('l',          'KeyL'));
-document.getElementById('btn-save')        .addEventListener('click', () => pressKey('s',          'KeyS'));
+const repeatCleanupFns = [];
+
+function bindToolbarKeyButton(id, key, code, opts = {}) {
+    const btn = document.getElementById(id);
+    const repeat = !!opts.repeat;
+    const initialDelay = opts.initialDelay ?? 350;
+    const interval = opts.interval ?? 75;
+    let delayTimer = null;
+    let intervalTimer = null;
+    let activePointerId = null;
+    let repeated = false;
+
+    function trigger() {
+        if (!btn.disabled) pressKey(key, code);
+    }
+
+    function stopRepeat() {
+        if (delayTimer !== null) {
+            clearTimeout(delayTimer);
+            delayTimer = null;
+        }
+        if (intervalTimer !== null) {
+            clearInterval(intervalTimer);
+            intervalTimer = null;
+        }
+        if (repeated) btn.dataset.suppressClick = '1';
+        repeated = false;
+        activePointerId = null;
+    }
+
+    btn.addEventListener('click', () => {
+        if (btn.dataset.suppressClick === '1') {
+            delete btn.dataset.suppressClick;
+            return;
+        }
+        trigger();
+    });
+
+    if (!repeat) return;
+
+    btn.addEventListener('pointerdown', e => {
+        if (e.button !== 0 || btn.disabled || activePointerId !== null) return;
+        activePointerId = e.pointerId;
+        repeated = false;
+        delayTimer = setTimeout(() => {
+            trigger();
+            repeated = true;
+            intervalTimer = setInterval(trigger, interval);
+        }, initialDelay);
+    });
+
+    btn.addEventListener('pointerup', e => {
+        if (e.pointerId === activePointerId) stopRepeat();
+    });
+    btn.addEventListener('pointerleave', e => {
+        if (e.pointerId === activePointerId) stopRepeat();
+    });
+    btn.addEventListener('pointercancel', stopRepeat);
+    repeatCleanupFns.push(stopRepeat);
+}
+
+window.addEventListener('blur', () => repeatCleanupFns.forEach(fn => fn()));
+
+bindToolbarKeyButton('btn-prev-round', 'ArrowUp', 'ArrowUp', { repeat: true });
+bindToolbarKeyButton('btn-next-round', 'ArrowDown', 'ArrowDown', { repeat: true });
+bindToolbarKeyButton('btn-add-round', '+', 'Equal', { repeat: true });
+bindToolbarKeyButton('btn-del-round', '-', 'Minus', { repeat: true });
+bindToolbarKeyButton('btn-clear-round', 'Backspace', 'Backspace');
+bindToolbarKeyButton('btn-step', ' ', 'Space');
+bindToolbarKeyButton('btn-delete-agent', 'Delete', 'Delete');
+bindToolbarKeyButton('btn-deselect', 'Escape', 'Escape');
+bindToolbarKeyButton('btn-load', 'l', 'KeyL');
+bindToolbarKeyButton('btn-save', 's', 'KeyS');
 
 // ── Options popover ───────────────────────────────────────────
 const optPanel = document.getElementById('options-panel');
