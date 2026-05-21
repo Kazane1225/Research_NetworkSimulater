@@ -130,27 +130,63 @@ window.addEventListener('keydown', e => {
 // ── Toolbar button → key mappings ─────────────────────────────
 const repeatCleanupFns = [];
 
+function waitForAnimationFrame() {
+    return new Promise(resolve => requestAnimationFrame(() => resolve()));
+}
+
+async function waitForToolbarRoundChange(readState, previousState, timeoutMs = 2000) {
+    const deadline = performance.now() + timeoutMs;
+    while (performance.now() < deadline) {
+        if (readState() !== previousState) {
+            await waitForAnimationFrame();
+            return true;
+        }
+        await waitForAnimationFrame();
+    }
+    return false;
+}
+
 function bindToolbarKeyButton(id, key, code, opts = {}) {
     const btn = document.getElementById(id);
     const repeat = !!opts.repeat;
     const initialDelay = opts.initialDelay ?? 350;
     const interval = opts.interval ?? 75;
+    const readRepeatState = opts.readRepeatState ?? null;
     let delayTimer = null;
     let intervalTimer = null;
     let activePointerId = null;
     let repeated = false;
+    let repeatGeneration = 0;
 
     function trigger() {
         if (!btn.disabled) pressKey(key, code);
     }
 
+    async function triggerUntilReleased(pointerId, generation) {
+        while (activePointerId === pointerId && repeatGeneration === generation) {
+            const beforeState = readRepeatState ? readRepeatState() : null;
+            trigger();
+            repeated = true;
+            if (!readRepeatState) {
+                await new Promise(resolve => {
+                    intervalTimer = setTimeout(resolve, interval);
+                });
+                intervalTimer = null;
+                continue;
+            }
+            const changed = await waitForToolbarRoundChange(readRepeatState, beforeState);
+            if (!changed) break;
+        }
+    }
+
     function stopRepeat() {
+        repeatGeneration++;
         if (delayTimer !== null) {
             clearTimeout(delayTimer);
             delayTimer = null;
         }
         if (intervalTimer !== null) {
-            clearInterval(intervalTimer);
+            clearTimeout(intervalTimer);
             intervalTimer = null;
         }
         if (repeated) btn.dataset.suppressClick = '1';
@@ -172,10 +208,10 @@ function bindToolbarKeyButton(id, key, code, opts = {}) {
         if (e.button !== 0 || btn.disabled || activePointerId !== null) return;
         activePointerId = e.pointerId;
         repeated = false;
+        const generation = ++repeatGeneration;
         delayTimer = setTimeout(() => {
-            trigger();
-            repeated = true;
-            intervalTimer = setInterval(trigger, interval);
+            delayTimer = null;
+            void triggerUntilReleased(e.pointerId, generation);
         }, initialDelay);
     });
 
@@ -193,8 +229,14 @@ window.addEventListener('blur', () => repeatCleanupFns.forEach(fn => fn()));
 
 bindToolbarKeyButton('btn-prev-round', 'ArrowUp', 'ArrowUp', { repeat: true });
 bindToolbarKeyButton('btn-next-round', 'ArrowDown', 'ArrowDown', { repeat: true });
-bindToolbarKeyButton('btn-add-round', '+', 'Equal', { repeat: true });
-bindToolbarKeyButton('btn-del-round', '-', 'Minus', { repeat: true });
+bindToolbarKeyButton('btn-add-round', '+', 'Equal', {
+    repeat: true,
+    readRepeatState: () => typeof Module._GetNumRounds === 'function' ? Module._GetNumRounds() : null,
+});
+bindToolbarKeyButton('btn-del-round', '-', 'Minus', {
+    repeat: true,
+    readRepeatState: () => typeof Module._GetNumRounds === 'function' ? Module._GetNumRounds() : null,
+});
 bindToolbarKeyButton('btn-clear-round', 'Backspace', 'Backspace');
 bindToolbarKeyButton('btn-step', ' ', 'Space');
 bindToolbarKeyButton('btn-delete-agent', 'Delete', 'Delete');
