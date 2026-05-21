@@ -11,9 +11,14 @@ int algorithm=0;
 int numSteps=-1;
 
 typedef struct {
+    HistoryTree *current;
+    int outdegree;
+} RoundCheckpointState;
+
+typedef struct {
     int prefixRounds;
     int numEntities;
-    EntitySnapshot *states;
+    RoundCheckpointState *states;
 } RoundCheckpoint;
 
 typedef struct {
@@ -34,6 +39,7 @@ static AppendPerfStats appendPerfStats={0};
 static Vector *roundCheckpoints=NULL;
 
 enum { ROUND_CHECKPOINT_INTERVAL = 8 };
+enum { ROUND_CHECKPOINT_MAX_STORED = 32 };
 
 static double PerfNowMs(void){
     static double freq=0.0;
@@ -173,8 +179,6 @@ static void FreeEntitySnap(Entity *e){
 
 static void FreeRoundCheckpoint(RoundCheckpoint *cp){
     if(!cp)return;
-    for(int i=0;i<cp->numEntities;i++)
-        FreeHistoryTree(cp->states[i].history);
     free(cp->states);
     free(cp);
 }
@@ -201,11 +205,10 @@ static RoundCheckpoint *CaptureRoundCheckpoint(int prefixRounds){
     RoundCheckpoint *cp=malloc(sizeof(RoundCheckpoint));
     cp->prefixRounds=prefixRounds;
     cp->numEntities=n;
-    cp->states=calloc((size_t)n,sizeof(EntitySnapshot));
+    cp->states=calloc((size_t)n,sizeof(RoundCheckpointState));
     for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
-        cp->states[i].history=CopyHistoryTree(e->history,NULL);
-        cp->states[i].current=FindCurrentInCopy(e->history,e->current,cp->states[i].history);
+        cp->states[i].current=e->current;
         cp->states[i].outdegree=e->outdegree;
     }
     return cp;
@@ -217,6 +220,12 @@ static void MaybeCaptureRoundCheckpoint(int prefixRounds){
     if(!roundCheckpoints)roundCheckpoints=NewVector(8);
     if(HasRoundCheckpoint(prefixRounds))return;
     AddVector(roundCheckpoints,CaptureRoundCheckpoint(prefixRounds));
+    while(roundCheckpoints->tot>ROUND_CHECKPOINT_MAX_STORED){
+        int dropIndex=0;
+        RoundCheckpoint *oldest=roundCheckpoints->items[0];
+        if(oldest->prefixRounds==1 && roundCheckpoints->tot>1)dropIndex=1;
+        FreeRoundCheckpoint(DeinsertVector(roundCheckpoints,dropIndex));
+    }
 }
 
 static RoundCheckpoint *FindRoundCheckpoint(int firstRound){
@@ -246,11 +255,10 @@ static bool RestoreRoundCheckpoint(RoundCheckpoint *cp){
     if(!cp || cp->numEntities!=network->entities->tot)return false;
     for(int i=0;i<cp->numEntities;i++){
         Entity *e=GetEntity(i);
-        if(e->history)FreeHistoryTree(e->history);
         ClearEntityMailbox(e);
         FreeEntitySnap(e);
-        e->history=CopyHistoryTree(cp->states[i].history,NULL);
-        e->current=FindCurrentInCopy(cp->states[i].history,cp->states[i].current,e->history);
+        TrimHistoryTreeToRound(e->history,cp->prefixRounds);
+        e->current=cp->states[i].current;
         e->outdegree=cp->states[i].outdegree;
         e->finalLeaf=NULL;
     }
@@ -262,6 +270,7 @@ static void TakeSnapshotsBeforeRound(void);
 static void ReplayRoundsFrom(int firstRound){
     int R=network->rounds->tot;
     for(int r=firstRound;r<R;r++){
+        SetHistoryTreeMutationRound(r+1);
         if(r==R-1)TakeSnapshotsBeforeRound();
         Vector *v=network->rounds->items[r];
         for(int i=0;i<v->tot;i++)
@@ -335,6 +344,7 @@ static bool SnapshotsValid(void){
 void ReExecuteLastRound(void){
     if(!SnapshotsValid()){ExecuteNetwork();return;}
     RestoreFromSnapshotsCopy();
+    SetHistoryTreeMutationRound(network->rounds->tot);
     Vector *v=network->rounds->items[network->rounds->tot-1];
     for(int i=0;i<v->tot;i++)ExecuteInteraction(v->items[i]);
     for(int i=0;i<network->entities->tot;i++)EndRound(GetEntity(i));
@@ -400,6 +410,7 @@ void AppendLastRound(void){
     double totalStart=PerfNowMs();
     TakeSnapshotsBeforeRound(); /* save pre-round entity states for ReExecuteLastRound */
     double afterSnapshot=PerfNowMs();
+    SetHistoryTreeMutationRound(network->rounds->tot);
     /* Save each entity's current finalLeaf (level R-1 node in finalHistory) */
     HistoryTree **prevFL=malloc(n*sizeof(HistoryTree*));
     for(int i=0;i<n;i++) prevFL[i]=GetEntity(i)->finalLeaf;
@@ -452,6 +463,7 @@ void AppendLastRound(void){
 void ExecuteNetwork(void){
     FreeRoundCheckpoints();
     roundCheckpoints=NewVector(8);
+    SetHistoryTreeMutationRound(0);
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
         if(e->history)FreeHistoryTree(e->history);
@@ -462,6 +474,7 @@ void ExecuteNetwork(void){
     }
     int R=network->rounds->tot;
     for(int r=0;r<R;r++){
+        SetHistoryTreeMutationRound(r+1);
         if(r==R-1)TakeSnapshotsBeforeRound(); /* snapshot of state just before last round */
         Vector *v=network->rounds->items[r];
         for(int i=0;i<v->tot;i++)

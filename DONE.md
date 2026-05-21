@@ -1,5 +1,34 @@
 # Optimization Log
 
+## 2026-05-21 — Differential Checkpoints For Deep Middle Insert Replay
+
+**File:** `src/network.c`, `src/history_tree.h`, `src/history_tree.c`
+
+**Problem:**  
+The first checkpoint-replay implementation stored full history-tree snapshots for every checkpoint. That made middle insert fast around the 250-round benchmark range, but at deeper round counts it accumulated too much memory and eventually failed during replay/restore. In practice, middle insert no longer reached the `1 s / click` limit first; it crashed before that.
+
+**Fix:**  
+Reworked checkpoints from full snapshots into differential checkpoints:
+
+1. Each `HistoryTree` node now records the round at which it was materialized (`bornRound`).
+2. A checkpoint stores only the prefix round, each entity's `current` pointer, and `outdegree`.
+3. Restoring a checkpoint trims each live history tree back to the checkpoint prefix instead of copying an entire saved tree.
+4. Replay then runs forward from that trimmed prefix as before.
+
+This keeps the append-at-end path unchanged. `AppendLastRound()` still uses the incremental last-round path and does not rely on checkpoint replay.
+
+**Measured effect:**
+
+- The earlier middle-insert failure around the old `~1000`-round region was pushed back.
+- After the redesign, middle insert stayed alive through roughly `1200` rounds in validation and later failed only before `1993` rounds.
+- At the same time, end-of-sequence append remained fast; around `1200` rounds it stayed near `19 ms/click` in the same environment.
+
+**Current status:**  
+This redesign addressed the original full-snapshot memory growth, but it did not fully solve deep middle-insert instability. Remaining failures are now later in the replay/restore path, so further work should continue there rather than weakening large-round-count behavior.
+
+**Benchmark note:**  
+All benchmark times in this log are machine-dependent. Absolute values will vary across hardware, browser builds, and tab/rendering conditions. The strongest conclusion is the relative comparison between `current` and `main` measured under the same environment.
+
 ## 2026-05-20 — Round-Append Benchmark (`current` vs `main`)
 
 **Goal:**  

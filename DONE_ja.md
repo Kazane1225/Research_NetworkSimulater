@@ -1,5 +1,34 @@
 # 最適化ログ
 
+## 2026-05-21 — deep middle insert replay 向けの差分 checkpoint 化
+
+**ファイル:** `src/network.c`, `src/history_tree.h`, `src/history_tree.c`
+
+**問題:**  
+最初の checkpoint replay 実装は、各 checkpoint ごとに history tree 全体の full snapshot を保持していた。そのため、250 ラウンド帯の middle insert ベンチでは高速だった一方で、より深いラウンド帯ではメモリ使用量が増えすぎ、replay / restore 中に失敗していた。実際には、middle insert は `1 s / click` の limit に達する前に crash していた。
+
+**修正内容:**  
+checkpoint を full snapshot から差分 checkpoint に作り直した。
+
+1. 各 `HistoryTree` ノードに、そのノードが materialize された round を表す `bornRound` を追加。
+2. checkpoint には、prefix round、各 entity の `current` ポインタ、`outdegree` だけを保持。
+3. checkpoint 復元時は、保存済み tree を丸ごとコピーする代わりに、live history tree を checkpoint の prefix まで trim するよう変更。
+4. その後の suffix replay 自体は従来どおり前方に再実行する。
+
+この変更は末尾追加経路には影響しない。`AppendLastRound()` は引き続き最終ラウンド専用の増分経路を使い、checkpoint replay には依存しない。
+
+**実測結果:**
+
+- 以前の `1000` ラウンド前後での middle insert crash は後ろへ押し下げられた。
+- 差分 checkpoint 化後、validation では middle insert はおおよそ `1200` ラウンドまでは生き残り、その後の crash も `1993` ラウンド到達前まで後退した。
+- 同じ環境で、末尾追加は引き続き高速で、`1200` ラウンド帯でもおよそ `19 ms/click` を維持した。
+
+**現状:**  
+この変更で full snapshot 起因のメモリ増加は抑えられたが、deep middle insert の不安定さはまだ完全には解消していない。残る失敗は replay / restore 経路のさらに後段にあるため、今後も大ラウンド帯の機能を弱めるのではなく、その経路自体を改善していくべきである。
+
+**ベンチマーク注記:**  
+このログのベンチマーク時間は machine-dependent である。絶対値はハードウェア、ブラウザ、タブ状態、描画条件によって変わるため、もっとも強い結論は同一環境で計測した `current` と `main` の相対比較にある。
+
 ## 2026-05-20 — ラウンド追加ベンチマーク（current vs `main`）
 
 **目的:**  

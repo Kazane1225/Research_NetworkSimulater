@@ -15,6 +15,12 @@ static int cmp_ull(const void *a,const void *b){
     return (x>y)-(x<y);
 }
 
+static int currentMutationRound=0;
+
+void SetHistoryTreeMutationRound(int round){
+    currentMutationRound=round;
+}
+
 /* Merkle hash: input + outdegree + sorted children hashes only.
    Red edges are intentionally excluded to avoid the circular ordering dependency
    (red edges point from level L to level L-1, which has not yet been processed
@@ -37,15 +43,29 @@ static void ComputeNodeHash(HistoryTree *h){
 
 /* Post-order DFS: recompute Merkle hashes for the entire subtree rooted at h. */
 void ComputeHashBottomUp(HistoryTree *h){
-    for(int i=0;i<h->children->tot;i++)
-        ComputeHashBottomUp(h->children->items[i]);
-    ComputeNodeHash(h);
+    if(!h)return;
+    Vector *stack=NewVector(16);
+    Vector *post=NewVector(16);
+    AddVector(stack,h);
+    while(stack->tot){
+        HistoryTree *node=DeleteVector(stack,stack->tot-1);
+        AddVector(post,node);
+        for(int i=0;i<node->children->tot;i++)
+            AddVector(stack,node->children->items[i]);
+    }
+    while(post->tot){
+        HistoryTree *node=DeleteVector(post,post->tot-1);
+        ComputeNodeHash(node);
+    }
+    FreeVector(post);
+    FreeVector(stack);
 }
 
 HistoryTree *NewHistoryTree(void){ // creates new root
     HistoryTree *h=malloc(sizeof(HistoryTree));
     h->input=-1;
     h->level=-1;
+    h->bornRound=-1;
     h->parent=NULL;
     h->children=NewVector(4);
     h->observations=NewVector(4);
@@ -57,13 +77,31 @@ HistoryTree *NewHistoryTree(void){ // creates new root
 }
 
 void FreeHistoryTree(HistoryTree *h){
-    for(int i=0;i<h->observations->tot;i++) // free red edges
-        free(h->observations->items[i]);
-    FreeVector(h->observations);
-    for(int i=0;i<h->children->tot;i++) // free children
-        FreeHistoryTree(h->children->items[i]);
-    FreeVector(h->children);
-    free(h);
+    if(!h)return;
+    Vector *stack=NewVector(16);
+    Vector *post=NewVector(16);
+    h->reference=h;
+    AddVector(stack,h);
+    while(stack->tot){
+        HistoryTree *node=DeleteVector(stack,stack->tot-1);
+        AddVector(post,node);
+        for(int i=0;i<node->children->tot;i++){
+            HistoryTree *child=node->children->items[i];
+            if(child->reference==child)continue;
+            child->reference=child;
+            AddVector(stack,child);
+        }
+    }
+    while(post->tot){
+        HistoryTree *node=DeleteVector(post,post->tot-1);
+        for(int i=0;i<node->observations->tot;i++)
+            free(node->observations->items[i]);
+        FreeVector(node->observations);
+        FreeVector(node->children);
+        free(node);
+    }
+    FreeVector(post);
+    FreeVector(stack);
 }
 
 Observation *NewObservation(HistoryTree *history,int multiplicity){
@@ -110,15 +148,55 @@ HistoryTree *AddHistoryTreeChild(HistoryTree *h,int input){ // adds a child node
     h2->parent=h;
     h2->input=input;
     h2->level=h->level+1;
+    h2->bornRound=currentMutationRound;
     h2->outdegree=outAware?0:-1;
     AddVector(h->children,h2);
     return h2;
 }
 
+void TrimHistoryTreeToRound(HistoryTree *h,int prefixRound){
+    if(!h)return;
+    Vector *stack=NewVector(16);
+    Vector *post=NewVector(16);
+    AddVector(stack,h);
+    while(stack->tot){
+        HistoryTree *node=DeleteVector(stack,stack->tot-1);
+        AddVector(post,node);
+        for(int i=0;i<node->children->tot;i++)
+            AddVector(stack,node->children->items[i]);
+    }
+    while(post->tot){
+        HistoryTree *node=DeleteVector(post,post->tot-1);
+        if(node==h || node->bornRound<=prefixRound)continue;
+        if(node->parent && node->parent->bornRound<=prefixRound){
+            for(int i=0;i<node->parent->children->tot;i++){
+                if(node->parent->children->items[i]==node){
+                    DeinsertVector(node->parent->children,i);
+                    break;
+                }
+            }
+        }
+        for(int i=0;i<node->observations->tot;i++)
+            free(node->observations->items[i]);
+        FreeVector(node->observations);
+        FreeVector(node->children);
+        free(node);
+    }
+    FreeVector(post);
+    FreeVector(stack);
+}
+
 static void ResetReferences(HistoryTree *h){
-    h->reference=NULL;
-    for(int i=0;i<h->children->tot;i++)
-        ResetReferences(h->children->items[i]);
+    if(!h)return;
+    Vector *stack=NewVector(16);
+    AddVector(stack,h);
+    while(stack->tot){
+        HistoryTree *node=DeleteVector(stack,stack->tot-1);
+        node->reference=NULL;
+        for(int i=0;i<node->children->tot;i++)
+            AddVector(stack,node->children->items[i]);
+    }
+    FreeVector(stack);
 }
 
 static bool EquivalentNodes(HistoryTree *h1,HistoryTree *h2){ // used when constructing isomorphisms
@@ -223,6 +301,7 @@ HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest){ // returns c
         HistoryTree *dst=src->reference;
         dst->input=src->input;
         dst->level=src->level;
+        dst->bornRound=src->bornRound;
         dst->outdegree=src->outdegree;
         dst->hash=src->hash;
         if(dst->level>au->level)au=dst;
