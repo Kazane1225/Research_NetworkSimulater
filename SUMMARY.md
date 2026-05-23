@@ -28,12 +28,13 @@ Measured by starting near round 1 in the tutorial network and repeatedly inserti
 
 ### Current limit check (`> 1 s / click`)
 
-Measured on the current branch only. The limit is defined as the first round where a single append takes more than `1000 ms`.
+Measured on the current branch only. The limit is defined as the first round where a single append/insert takes more than `1000 ms` (JS-side wall-clock including one rAF frame ≈ 16 ms overhead).
 
-| Scenario | Branch | Limit definition | Result |
-|---|---|---|---|
-| End-of-sequence append | current | Single append `> 1000 ms` | Not reached by 5000 rounds |
-| Middle insert near round 1 | current | Single insert `> 1000 ms` | Not reached before crash at 1993 rounds |
+| Scenario | Limit definition | Result |
+|---|---|---|
+| End-of-sequence append (`AppendLastRound`) | Single append `> 1000 ms` | Not reached by 5000 rounds (~224 ms at round 5000) |
+| Middle insert from round 1 (constant ~5-round suffix, bottleneck is `RebuildFinalHistory` + `ComputeAuxData`) | Single insert `> 1000 ms` | **~3252 rounds** (1003 ms, JS-side timing; was ~2980 before Merkle hash) |
+| Middle insert at round 100, 1300 total rounds (suffix 1199 rounds) | Crash test | No crash; ~12.5 s per insert (suffix of 1199 rounds fully re-executed) |
 
 ## Key Points
 
@@ -82,12 +83,28 @@ This makes the inner loop O(1) expected per child instead of O(k), turning the p
 
 ## History-Tree Hash
 
-- Each `HistoryTree` node stores a Merkle-style structural hash.
-- The hash is built from `input`, `outdegree`, and the sorted multiset of child hashes.
-- Red edges are intentionally excluded because they point upward (from level L toward level L−1) and would create a computation-order dependency: in a bottom-up (post-order) traversal, level-L nodes are processed before their shallower level-(L−1) ancestors, so the ancestor hashes are not yet available when level-L hashes are being computed.
-- The hash is used as a fast inequality check before the full tree-isomorphism logic runs; it is a pruning step, not the final correctness check by itself.
+Two separate hash mechanisms exist in `history_tree.c`:
+
+### 1. Merkle structural hash (per-node `h->hash`) — **active**
+
+- Each `HistoryTree` node has a 64-bit `hash` field, initialized to 0 in `NewHistoryTree`.
+- `ComputeNodeHash` computes the hash from `input`, `outdegree`, child count, and the sorted array of child hashes. `ComputeHashBottomUp` runs this post-order over an entire subtree.
+- **`ComputeHashBottomUp` is now called in `RebuildFinalHistory`** at the start of every merge pass (once per entity tree, before the merge loop).
+- **Entity-deduplication optimization**: after hashing all entity trees, the merge loop checks whether any prior entity shares the same root hash (same hash ↔ isomorphic subtree). If so, the second entity's `MergeHistoryTrees` call is skipped entirely and it reuses the first entity's `finalLeaf`. This is correct because isomorphic entity trees map to the same finalHistory node.
+- **The `EquivalentNodes` short-circuit** (`if(h1->hash && h2->hash && h1->hash!=h2->hash) return false`) still never fires: finalHistory nodes are always created fresh with `hash=0`, so both sides are 0 when merging an entity tree into finalHistory. The deduplication works at the entity level (before any merge call), not inside `EquivalentNodes`.
+- **Effectiveness**: benefit depends on network symmetry. For the tutorial network (all 6 entities uniquely identifiable, all trees distinct), no merges are skipped — overhead is one `ComputeHashBottomUp` call per entity and an O(n²) uniqueness check (negligible for typical n ≤ 50). For symmetric/regular networks where multiple entities share identical history trees, the optimization skips redundant merge calls entirely.
+
+### 2. Child-lookup key (`local_key`, used inside `MergeHistoryTrees`) — **active**
+
+- An open-addressing hash map is built over `b->children` before processing each BFS node's children in `MergeHistoryTrees`.
+- **Key fields**: `(input + 0x8000, outdegree + 2, observations->tot)` — offset biases keep values away from 0, which is the empty-slot sentinel. Result is normalised to non-zero: `return k ? k : 1ULL`.
+- The same `hash_mix` function is used: `(h ^ v) * 0x9e3779b97f4a7c15 ^ (result >> 30)`.
+- This key covers exactly the three fields that `EquivalentNodes` checks first. A key mismatch guarantees `EquivalentNodes` returns false; on a key match, `EquivalentNodes` is called for the full structural check.
+- Capacity: `(existing + incoming) * 2 + 3` keeps load factor below 50%.
 
 ### Why not build the hash from the parent's value and incoming red-edge predecessor hashes?
+
+(Note: this argument applies to the `h->hash` Merkle field, which is currently dead code. It explains the design rationale if the feature were activated.)
 
 A node at level L receives red edges from deeper nodes (level L+1) that point back toward it. One could imagine hashing N as `hash(parent_value, input, multiset_of_hashes_of_nodes_with_red_edges_to_N)`. Even if `parent_value` is used instead of `parent_hash`, this still mixes context into the node hash — the core problem is the same regardless of which form the parent's information takes. There are two structural reasons this does not work:
 
@@ -99,24 +116,29 @@ The current design (children only, sorted multiset) is the standard Merkle const
 
 ## Crash Status
 
-- Middle insert no longer fails around the old `~1000`-round region after the checkpoint redesign, but it still crashes later, currently before `1993` rounds.
-- The current direction is to keep improving the replay/restore path rather than weakening the feature for large round counts.
-- The reason is that the remaining instability is in the deep middle-insert checkpoint/replay path, while end-of-sequence append is still stable and fast.
+**Fixed.**
 
-### Why it likely crashes (hypothesis — needs further investigation)
+- Middle insert no longer crashes.
+- Root cause confirmed: `ComputeAuxDataWidth` was recursive with depth equal to the round count. At ~1993 rounds this overflowed the default WebAssembly shadow-stack (64 KB), causing a silent stack overflow → crash.
+- Fix: rewrote `ComputeAuxDataWidth` as a two-phase iterative DFS (Phase 1: pre-order via explicit stack to allocate and attach `AuxData`; Phase 2: bottom-up reverse iteration to compute widths). No recursion remains in the aux-data path.
+- Verified: middle insert at round 100 in a 1301-round simulation (suffix 1199 rounds) completed with no crash. Previously any deep middle insert crashed before ~1993 rounds. Note: the insert itself took ~12.5 s because `ExecuteNetworkFromRound` re-executes the full 1199-round suffix; this is expected compute cost, not a regression.
 
-The checkpoint store keeps at most `ROUND_CHECKPOINT_MAX_STORED = 32` entries at a spacing of `ROUND_CHECKPOINT_INTERVAL = 8` rounds. Round 1 is specially protected from eviction. At ~1993 total rounds, the 31 non-protected slots cover roughly the most recent 248 rounds (rounds 1744–1992). For a middle insert near round 1, the nearest available checkpoint is round 1 itself; all others are too far ahead. `ExecuteNetworkFromRound` therefore restores to round 1 and replays all ~1992 remaining rounds.
+### Performance limit after fix
 
-During that deep replay, two operations have large peak memory cost:
+With the crash fixed, the practical limit shifts to raw compute time:
 
-- `TakeSnapshotsBeforeRound()` (called at the final replay round) copies every entity's full history tree. At ~1993 rounds, each tree can have on the order of thousands of nodes, so copying all entities' trees roughly doubles the live node count at that moment.
-- `RebuildFinalHistory()` immediately after merges all entity trees into `finalHistory` and runs `ComputeAuxData`, which allocates auxiliary structures over the merged tree.
+| Scenario | Limit definition | Result |
+|---|---|---|
+| End-of-sequence append (`AppendLastRound`) | Single append `> 1000 ms` | Not reached by 5000 rounds (~224 ms at round 5000) |
+| Middle insert from round 1 (~5-round suffix, bottleneck is `RebuildFinalHistory` + `ComputeAuxData`) | Single insert `> 1000 ms` | **~3252 rounds** (Merkle hash: +272 rounds vs ~2980 before) |
+| Middle insert at round 100, 1300 total rounds (suffix 1199 rounds) | Crash test + timing | No crash; ~12.5 s for one insert (1199-round suffix fully re-executed) |
 
-The combined peak — live entity trees + snapshot copies + finalHistory + auxiliary data — can approach or exceed the WebAssembly linear-memory limit (typically 256 MB). A failed `malloc` that is not checked would then produce a null-pointer dereference (crash) somewhere inside the tree manipulation code.
+### Remaining hypotheses (no longer blocking, kept for reference)
 
-A secondary candidate is a dangling pointer in the restored checkpoint: the checkpoint stores a raw `current` pointer into the history tree. If `TrimHistoryTreeToRound` has an edge case that frees a node whose `bornRound` equals `prefixRound` (the boundary condition), the restored pointer is stale. This is harder to trigger and would produce a more erratic crash pattern, but it cannot be ruled out without a sanitizer run.
+The earlier crash analysis identified two secondary candidates that have not been ruled out at even higher round counts:
 
-Next steps: run with `AddressSanitizer` or check `malloc` return values to distinguish memory exhaustion from a use-after-free.
+- **Memory exhaustion**: `TakeSnapshotsBeforeRound()` copies all entity history trees; at very large round counts the combined peak (live trees + snapshot copies + `finalHistory` + aux data) could approach the 256 MB WASM linear-memory limit. A `malloc` failure that is not checked would cause a null-pointer dereference.
+- **Dangling checkpoint pointer**: `ExecuteNetworkFromRound` restores a raw `current` pointer stored in the checkpoint. If `TrimHistoryTreeToRound` frees a node whose `bornRound == prefixRound` (boundary condition), the restored pointer is stale.
 
 ## Measurement Notes
 

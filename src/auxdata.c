@@ -11,29 +11,55 @@ AuxData *GetAuxData(int i,int j){
     return GetLevel(i)->items[j];
 }
 
-static int ComputeAuxDataWidth(HistoryTree *h){
-    int index=h->level+1;
-    while(aux->tot<=index)AddVector(aux,NewVector(8));
-    AuxData *data=malloc(sizeof(AuxData));
-    data->i=index;
-    data->j=AddVector(GetLevel(index),data);
-    h->data=data;
-    data->h=h;
-    if(index>0)data->parent=GetLevel(index-1)->tot-1;
-    else data->parent=-1;
-    data->children=NewVectorI(4);
-    data->observations=NewVectorI(4);
-    data->multiplicities=NewVectorI(4);
-    data->outdegree=h->outdegree;
-    data->anonymity=0;
-    data->visible=false;
-    data->width=0;
-    for(int i=0;i<h->children->tot;i++){
-        data->width+=ComputeAuxDataWidth(h->children->items[i]);
-        AddVectorI(data->children,GetLevel(index+1)->tot-1);
+static int ComputeAuxDataWidth(HistoryTree *root){
+    /* Phase 1: iterative pre-order DFS — allocate and register an AuxData node
+       for every HistoryTree node.  Children are pushed right-to-left so left
+       subtrees are visited first, which preserves the same level-index assignment
+       order as the old recursive version.
+       Invariant: when a node is popped, GetLevel(index-1)->tot-1 is that node's
+       parent index — identical to what the recursive entry condition guaranteed. */
+    Vector *stk=NewVector(64);
+    AddVector(stk,root);
+    while(stk->tot){
+        HistoryTree *h=(HistoryTree*)DeleteVector(stk,stk->tot-1);
+        int index=h->level+1;
+        while(aux->tot<=index)AddVector(aux,NewVector(8));
+        AuxData *data=malloc(sizeof(AuxData));
+        data->i=index;
+        data->j=AddVector(GetLevel(index),data);
+        h->data=data;
+        data->h=h;
+        data->parent=(index>0)?GetLevel(index-1)->tot-1:-1;
+        data->children=NewVectorI(4);
+        data->observations=NewVectorI(4);
+        data->multiplicities=NewVectorI(4);
+        data->outdegree=h->outdegree;
+        data->anonymity=0;
+        data->visible=false;
+        data->width=0;
+        for(int i=h->children->tot-1;i>=0;i--)
+            AddVector(stk,h->children->items[i]);
     }
-    if(!data->width)data->width=1;
-    return data->width;
+    FreeVector(stk);
+    /* Phase 2: bottom-up — fill each node's children index list and compute
+       widths.  Processing the deepest level first ensures every child's width
+       is ready before its parent reads it. */
+    for(int lev=aux->tot-1;lev>=0;lev--){
+        Vector *v=GetLevel(lev);
+        for(int j=0;j<v->tot;j++){
+            AuxData *data=(AuxData*)v->items[j];
+            HistoryTree *h=data->h;
+            for(int k=0;k<h->children->tot;k++){
+                AuxData *cdata=(AuxData*)((HistoryTree*)h->children->items[k])->data;
+                AddVectorI(data->children,cdata->j);
+            }
+            if(!data->children->tot){data->width=1;continue;}
+            data->width=0;
+            for(int k=0;k<data->children->tot;k++)
+                data->width+=GetAuxData(lev+1,data->children->items[k])->width;
+        }
+    }
+    return((AuxData*)root->data)->width;
 }
 
 static void ComputeAuxDataCoordinates(int i,int j,float x1,float y1,float x2,float y2){

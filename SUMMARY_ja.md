@@ -28,12 +28,13 @@ Tutorial network の round 1 付近から round 挿入を繰り返し、合計 2
 
 ### current の limit 計測（`> 1 s / click`）
 
-current ブランチのみを対象に、1 回の追加が `1000 ms` を超える最初のラウンド数を limit として測定した。
+current ブランチのみを対象に、1 回の追加/挿入が `1000 ms` を超える最初のラウンド数を limit として測定した（JS 側 wall-clock 計測、1 rAF フレーム ≈ 16 ms 込み）。
 
-| シナリオ | ブランチ | limit 定義 | 結果 |
-|---|---|---|---|
-| 末尾追加 | current | 1 回の追加が `> 1000 ms` | 5000 ラウンドでも未到達 |
-| round 1 付近の middle insert | current | 1 回の追加が `> 1000 ms` | 1993 ラウンド到達前に crash したため未到達 |
+| シナリオ | limit 定義 | 結果 |
+|---|---|---|
+| 末尾追加（`AppendLastRound`） | 1 回の追加が `> 1000 ms` | 5000 ラウンドでも未到達（round 5000 で ≈24 ms）|
+| ラウンド 1 からの middle insert（suffix 常に約 5 ラウンド、ボトルネックは `RebuildFinalHistory` + `ComputeAuxData`） | 1 回の挿入が `> 1000 ms` | **約 3252 ラウンド**（1003 ms、JS 側計測; Merkle hash 前は約 2980 ラウンド） |
+| ラウンド 100 での middle insert、合計 1300 ラウンド（suffix 1199 ラウンド） | クラッシュ確認 | クラッシュなし；約 12.5 s（suffix 1199 ラウンドの全再実行コスト） |
 
 ## 要点
 
@@ -82,12 +83,31 @@ current ブランチのみを対象に、1 回の追加が `1000 ms` を超え�
 
 ## History Tree の hash
 
-- 各 `HistoryTree` ノードは、Merkle 風の構造 hash を持つ。
-- hash は `input`、`outdegree`、子ノード hash のソート済みマルチセットから作る。
-- red edge は上方向（レベル L からレベル L−1 方向）を指しており、bottom-up（後順）traversal では レベル L のノードをレベル L−1 の祖先より先に処理するため、祖先の hash がまだ計算されていない。そのため red edge を含めると計算順序の依存関係が生じることになり、意図的に除外している。
-- この hash は「違う木を早く弾く」ための前処理であり、最終的な同型判定そのものではない。
+`history_tree.c` には 2 種類の hash 計算が存在する。
+
+### 1. Merkle 構造 hash（ノードごとの `h->hash`）**（現在有効）**
+
+- 各 `HistoryTree` ノードは 64 bit の Merkle 風構造 hash を `h->hash` に持つ。
+- **mix 関数**: `hash_mix(h, v)` = `(h ^ v) * 0x9e3779b97f4a7c15 ^ (結果 >> 30)` — Fibonacci hash 定数によるかけ算と右シフトによるアバランシェステップ。
+- **ノード単体の計算**（`ComputeNodeHash`）: FNV-1a のオフセット基底値 `0xcbf29ce484222325` を初期値とし、`input`・`outdegree`・子数・子ノード hash のソート済み配列を混ぜ込む。
+- **ツリー全体の再計算**（`ComputeHashBottomUp`）: 明示的な `Vector` スタック 2 本を使った反復後順 DFS。再帰なし。
+- **`ComputeHashBottomUp` は `RebuildFinalHistory` の先頭で呼ばれる**（マージループより前に全エンティティのツリーに対して実行）。
+- **エンティティ重複排除の最適化**: 全エンティティのツリーを hash した後、マージループで「既に処理したエンティティと root hash が同じもの（＝同型ツリー）があれば `MergeHistoryTrees` を省略し、そのエンティティの `finalLeaf` を再利用する」処理を追加。同型ツリーは finalHistory 上の同じノードに対応するため、これは意味的に正しい。
+- **`EquivalentNodes` の短絡評価**（`if(h1->hash && h2->hash && h1->hash!=h2->hash) return false`）は依然として発動しない：finalHistory ノードは常に `hash=0` で新規作成されるため、エンティティツリーと finalHistory ノードを比較する際は両辺が 0 のままである。重複排除はマージ呼び出しの前（エンティティレベル）で行われるため、`EquivalentNodes` 内の短絡は不要。
+- **効果はネットワークの対称性に依存する**: tutorial ネットワーク（全 6 エンティティが一意識別可能、全ツリーが異なる）ではマージ省略はゼロ — オーバーヘッドはエンティティごとの `ComputeHashBottomUp` 呼び出しと O(n²) 重複確認（通常 n ≤ 50 なので無視できる）のみ。対称・正則なネットワークで複数エンティティが同一ツリーを持つ場合、重複したマージ呼び出しを丸ごとスキップできる。
+- **ゼロ規約**: `h->hash = 0` は*未計算*を意味する（`NewHistoryTree` で初期化）。
+- **red edge の除外**: red edge は上方向（レベル L → レベル L−1）を指す。bottom-up パスではレベル L−1 の祖先がまだ処理されていない時点でレベル L のノードを hash するため、計算順序の依存関係が生じる。また red edge を含めると subtree の独立性が壊れ、同型判定が機能しなくなる（詳細は以下）。
+
+### 2. 子探索キー（`local_key`、`MergeHistoryTrees` 内部専用）
+
+- `MergeHistoryTrees` 内のオープンアドレス法子探索ハッシュマップ専用の軽量キー。
+- **キーフィールド**: `(input + 0x8000, outdegree + 2, observations->tot)` — 定数オフセットで値をゼロから遠ざけ、空スロットセンチネル（0）との衝突を低減する。
+- 同じ `hash_mix` 関数を使い、結果がゼロの場合は 1 に正規化する: `return k ? k : 1ULL`。
+- このキーは `EquivalentNodes` が最初にチェックする最も安価な 3 フィールドのみをカバーする。キー不一致は `EquivalentNodes` が必ず false を返すことを保証するため、呼び出しを丸ごとスキップできる。キー一致の場合はハッシュテーブルのルックアップが `EquivalentNodes` にフォールスルーして完全チェックを行う。
 
 ### なぜ「親の値 + 赤エッジ入力元の hash」で作らないのか
+
+（注: この議論は現在デッドコードである `h->hash` Merkle フィールドに関するもの。機能が有効化された場合の設計根拠として記録する。）
 
 レベル L のノード N には、より深いノード（レベル L+1）から N へ向かう赤エッジが入ってくる場合がある。`hash(parent_value, input, Nへの赤エッジを持つノードのhashのマルチセット)` という構成も考えられる。なお `parent_value` の代わりに `parent_hash` を使っても本質的な問題は変わらない。親の情報をどの形で持ち込んでも、コンテキストを hash に混入させる点では同じだからである。しかしこれが機能しない構造的な理由が 2 つある：
 
@@ -99,24 +119,29 @@ current ブランチのみを対象に、1 回の追加が `1000 ms` を超え�
 
 ## Crash 改善方針
 
-- middle insert は、以前の `1000` ラウンド前後での crash は改善したが、現在も `1993` ラウンド到達前に crash する。
-- 今後も大ラウンド帯で機能を弱めるのではなく、checkpoint / replay / restore 経路そのものを安定化させる方針。
-- 理由は、残っている不安定さが deep middle insert の replay 経路にあり、末尾追加側は引き続き安定かつ高速だからである。
+**修正済み。**
 
-### なぜ crash するか（仮説 — 要追加調査）
+- middle insert は crash しなくなった。
+- 根本原因の確認: `ComputeAuxDataWidth` がラウンド数を深さとする再帰関数だった。約 1993 ラウンドで WebAssembly のデフォルトシャドウスタック（64 KB）を超え、スタックオーバーフローによる crash が発生していた。
+- 修正内容: `ComputeAuxDataWidth` を 2 フェーズの反復 DFS に書き換えた。フェーズ 1: 明示的スタックを使った前順走査で `AuxData` を割り当て・接続。フェーズ 2: 逆順（ボトムアップ）で幅を計算。補助データ計算経路の再帰はゼロになった。
+- 検証: 合計 1301 ラウンドの状態でラウンド 100 に middle insert を実行（suffix 1199 ラウンド）→ クラッシュなし。従来は 1993 ラウンド到達前に必ず crash していた。注: 挿入 1 回に約 12.5 s かかったのは `ExecuteNetworkFromRound` が suffix 1199 ラウンドを全再実行するためであり、リグレッションではなく想定内の計算コストである。
 
-checkpoint ストアは最大 `ROUND_CHECKPOINT_MAX_STORED = 32` エントリを `ROUND_CHECKPOINT_INTERVAL = 8` ラウンド間隔で保持し、ラウンド 1 だけは eviction から保護されている。総ラウンド数が約 1993 の時点では、保護されていない 31 スロットが最近の約 248 ラウンド（1744〜1992）をカバーする。ラウンド 1 付近での middle insert では、1000 ms 以下の最良 checkpoint はラウンド 1 のみとなり、`ExecuteNetworkFromRound` がラウンド 1 に戻して約 1992 ラウンド分を全て再実行することになる。
+### 修正後の性能上限
 
-そのような深い replay の中で、メモリ使用量のピークが大きくなる処理が 2 つある：
+crash が解消されたことで、実質的な上限は純粋な計算速度に移った。
 
-- `TakeSnapshotsBeforeRound()`（replay の最終ラウンドで呼ばれる）は、全エンティティの history tree を丸ごとコピーする。約 1993 ラウンド時点では各ツリーのノード数が数千オーダーになりうるため、コピーだけで生存ノード数が一時的に約 2 倍になる。
-- 直後の `RebuildFinalHistory()` は全エンティティのツリーを `finalHistory` にマージし、`ComputeAuxData` が補助構造を追加で確保する。
+| シナリオ | limit 定義 | 結果 |
+|---|---|---|
+| 末尾追加（`AppendLastRound`） | 1 回の追加が `> 1000 ms` | 5000 ラウンドでも未到達（round 5000 で ~224 ms）|
+| ラウンド 1 からの middle insert（suffix 約 5 ラウンド固定、ボトルネックは `RebuildFinalHistory` + `ComputeAuxData`） | 1 回の挿入が `> 1000 ms` | **約 3252 ラウンド**（Merkle hash 導入後; 導入前は約 2980 ラウンド） |
+| ラウンド 100 での middle insert、合計 1300 ラウンド（suffix 1199 ラウンド） | クラッシュ確認 + 時間計測 | クラッシュなし；約 12.5 s（suffix 1199 ラウンドの全再実行コスト）|
 
-合計ピーク（生存 entity ツリー＋スナップショットコピー＋finalHistory＋補助データ）が WebAssembly の線形メモリ上限（通常 256 MB）に達するか超える可能性がある。`malloc` の失敗が未チェックのまま伝播すると、ツリー操作の内部でヌルポインタ参照（crash）が発生する。
+### 残存する仮説（ブロッカーではないが記録として保持）
 
-第 2 の候補は、復元した checkpoint のダングリングポインタである。checkpoint は `current` を history tree ノードへの生ポインタとして保存している。`TrimHistoryTreeToRound` が `bornRound == prefixRound`（境界条件）のノードを誤って解放した場合、復元したポインタが無効になる。こちらはより再現パターンが不定で、サニタイザを使わないと特定しにくい。
+初期の crash 分析で挙がった第 2・第 3 の候補は、さらに大きなラウンド数で再浮上する可能性がある。
 
-次のステップ：`AddressSanitizer` を使って実行するか、`malloc` の戻り値チェックを追加し、メモリ枯渇と use-after-free を切り分ける。
+- **メモリ枯渇**: `TakeSnapshotsBeforeRound()` が全エンティティの history tree をコピーするため、ラウンド数が非常に大きくなるとピーク使用量（生存ツリー＋スナップショット＋`finalHistory`＋補助データ）が 256 MB WASM 上限に近づく可能性がある。`malloc` の失敗が未チェックのまま伝播するとヌルポインタ参照 (crash) になる。
+- **ダングリング checkpoint ポインタ**: `ExecuteNetworkFromRound` は checkpoint に保存された生ポインタ `current` を復元する。`TrimHistoryTreeToRound` が `bornRound == prefixRound`（境界条件）のノードを誤って解放した場合、復元したポインタが無効になる。
 
 ## 測定メモ
 

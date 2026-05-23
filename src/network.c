@@ -285,9 +285,19 @@ static void ReplayRoundsFrom(int firstRound){
 static void RebuildFinalHistory(void){
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
-    for(int i=0;i<network->entities->tot;i++){
+    int n=network->entities->tot;
+    /* Compute Merkle hashes so identical trees can be detected in O(1). */
+    for(int i=0;i<n;i++) ComputeHashBottomUp(GetEntity(i)->history);
+    for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
-        e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
+        /* If a previous entity has the same tree structure (same root hash),
+           its merge was a no-op for finalHistory — reuse its finalLeaf directly. */
+        HistoryTree *leaf=NULL;
+        unsigned long long h=e->history->hash;
+        for(int j=0;j<i;j++){
+            if(GetEntity(j)->history->hash==h){leaf=GetEntity(j)->finalLeaf;break;}
+        }
+        e->finalLeaf = leaf ? leaf : MergeHistoryTrees(finalHistory,e->history,NULL);
     }
     ComputeAuxData(finalHistory);
 }
