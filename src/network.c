@@ -1,4 +1,7 @@
 ﻿#include "main.h"
+#ifdef __EMSCRIPTEN__
+#include <SDL3/SDL.h>
+#endif
 
 Network *network=NULL;
 int currentRound=-1;
@@ -9,6 +12,20 @@ bool drawingEdge=false;
 bool draggingEntity=false;
 int algorithm=0;
 int numSteps=-1;
+
+static double lastRebuildMs=0.0;
+static double sumRebuildMs=0.0;
+static int rebuildSamples=0;
+
+static double PerfNowMs(void){
+    static double freq=0.0;
+#ifdef __EMSCRIPTEN__
+    if(freq==0.0)freq=(double)SDL_GetPerformanceFrequency();
+    return 1000.0*(double)SDL_GetPerformanceCounter()/freq;
+#else
+    return 0.0;
+#endif
+}
 
 Entity *GetEntity(int i){
     return network->entities->items[i];
@@ -99,12 +116,15 @@ void ExecuteNetwork(void){
     int n=network->entities->tot;
     /* Compute vista hashes (top-down) so MergeHistoryTrees can use them
        for fast per-node matching, skipping EquivalentNodes on hash match. */
+    double t0=PerfNowMs();
     for(int i=0;i<n;i++) ComputeVistaHashTopDown(GetEntity(i)->history);
     for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
         e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
     }
     ComputeAuxData(finalHistory);
+    double elapsed=PerfNowMs()-t0;
+    lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
 }
 
 void DoneNetwork(void){
@@ -507,6 +527,11 @@ EMSCRIPTEN_KEEPALIVE int GetNumAnonymityClasses(void){
     if(!aux || aux->tot==0)return 0;
     return GetLevel(aux->tot-1)->tot;
 }
+
+EMSCRIPTEN_KEEPALIVE void ResetRebuildPerfMetrics(void){ lastRebuildMs=0.0; sumRebuildMs=0.0; rebuildSamples=0; }
+EMSCRIPTEN_KEEPALIVE double GetLastRebuildMs(void){ return lastRebuildMs; }
+EMSCRIPTEN_KEEPALIVE double GetSumRebuildMs(void)  { return sumRebuildMs;  }
+EMSCRIPTEN_KEEPALIVE int    GetRebuildSamples(void){ return rebuildSamples; }
 
 EMSCRIPTEN_KEEPALIVE int GetNumUniqueAgents(void){
     if(!aux || aux->tot==0)return 0;
