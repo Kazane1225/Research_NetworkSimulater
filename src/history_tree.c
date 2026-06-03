@@ -61,6 +61,45 @@ void ComputeHashBottomUp(HistoryTree *h){
     FreeVector(stack);
 }
 
+/* Vista hash: encodes the full isomorphism condition at a node.
+   hash(input, outdegree, parent->vista_hash,
+        sorted multiset of {red_edge_target->vista_hash XOR multiplicity})
+   Computed top-down (BFS) so parent and previous-level red-edge targets
+   are always available when a node's hash is computed.                   */
+static unsigned long long compute_vista_hash_node(HistoryTree *h){
+    unsigned long long vh=0xcbf29ce484222325ULL;
+    vh=hash_mix(vh,(unsigned long long)(h->input+0x8000ULL));
+    vh=hash_mix(vh,(unsigned long long)(h->outdegree+2));
+    vh=hash_mix(vh,h->parent ? h->parent->vista_hash : 0xdeadbeefcafe0000ULL);
+    int nc=h->observations->tot;
+    if(nc>0){
+        unsigned long long *pairs=malloc((size_t)nc*sizeof(unsigned long long));
+        for(int i=0;i<nc;i++){
+            Observation *o=h->observations->items[i];
+            pairs[i]=hash_mix(o->history->vista_hash,(unsigned long long)o->multiplicity);
+        }
+        qsort(pairs,(size_t)nc,sizeof(unsigned long long),cmp_ull);
+        for(int i=0;i<nc;i++)vh=hash_mix(vh,pairs[i]);
+        free(pairs);
+    }
+    return vh?vh:1ULL;
+}
+
+/* Top-down BFS: compute vista_hash for each node after its parent and all
+   previous-level nodes (red-edge targets) have already been hashed.      */
+void ComputeVistaHashTopDown(HistoryTree *h){
+    if(!h)return;
+    Queue *q=NewQueue();
+    AppendQueue(q,h);
+    while(!IsQueueEmpty(q)){
+        HistoryTree *node=PopQueue(q);
+        node->vista_hash=compute_vista_hash_node(node);
+        for(int i=0;i<node->children->tot;i++)
+            AppendQueue(q,node->children->items[i]);
+    }
+    FreeQueue(q);
+}
+
 HistoryTree *NewHistoryTree(void){ // creates new root
     HistoryTree *h=malloc(sizeof(HistoryTree));
     h->input=-1;
@@ -73,6 +112,7 @@ HistoryTree *NewHistoryTree(void){ // creates new root
     h->reference=NULL;
     h->data=NULL;
     h->hash=0;
+    h->vista_hash=0;
     return h;
 }
 
@@ -230,17 +270,28 @@ static unsigned long long local_key(HistoryTree *h){
     k=hash_mix(k,(unsigned long long)h->observations->tot);
     return k?k:1ULL; /* 0 reserved for empty slot */
 }
+/* Use vista_hash when available (encodes full isomorphism condition);
+   fall back to the cheap 3-field approximation otherwise.             */
+static unsigned long long node_key(HistoryTree *h){
+    return h->vista_hash ? h->vista_hash : local_key(h);
+}
 static void cmap_put(ChildEntry *map,int cap,HistoryTree *node){
-    unsigned long long k=local_key(node);
+    unsigned long long k=node_key(node);
     int idx=(int)(k%(unsigned long long)cap);
     while(map[idx].key){if(++idx==cap)idx=0;}
     map[idx].key=k; map[idx].node=node;
 }
 static HistoryTree *cmap_get(ChildEntry *map,int cap,HistoryTree *x){
-    unsigned long long k=local_key(x);
+    unsigned long long k=node_key(x);
     int idx=(int)(k%(unsigned long long)cap);
     while(map[idx].key){
-        if(map[idx].key==k&&EquivalentNodes(x,map[idx].node))return map[idx].node;
+        if(map[idx].key==k){
+            HistoryTree *cand=map[idx].node;
+            /* When both nodes have vista_hash, a key match encodes full
+               isomorphism — skip EquivalentNodes (64-bit collisions negligible). */
+            if(x->vista_hash&&cand->vista_hash)return cand;
+            if(EquivalentNodes(x,cand))return cand;
+        }
         if(++idx==cap)idx=0;
     }
     return NULL;
@@ -251,6 +302,8 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
     if(added)*added=false;
     Queue *q=NewQueue();
     h2->reference=h1; // map root of h2 to root of h1
+    /* Ensure the finalHistory root has a vista_hash before BFS begins. */
+    if(!h1->vista_hash)h1->vista_hash=compute_vista_hash_node(h1);
     AppendQueue(q,h2); // enqueue root of h2
     while(!IsQueueEmpty(q)){
         HistoryTree *a=PopQueue(q); // children of a in h2 must be mapped into h1
@@ -273,6 +326,9 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
                     AddNewRedEdge(y,o->history->reference,o->multiplicity);
                 }
                 y->outdegree=x->outdegree;
+                /* Compute vista_hash immediately: parent (b) and all red-edge targets
+                   (level L-1 finalHistory nodes) are already hashed by BFS ordering. */
+                y->vista_hash=compute_vista_hash_node(y);
                 cmap_put(map,cap,y); // keep map current for remaining children of a
             }
             x->reference=y;
@@ -304,6 +360,7 @@ HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest){ // returns c
         dst->bornRound=src->bornRound;
         dst->outdegree=src->outdegree;
         dst->hash=src->hash;
+        dst->vista_hash=src->vista_hash;
         if(dst->level>au->level)au=dst;
         /* Copy red edges — targets are at level-1 and already have references set */
         for(int i=0;i<src->observations->tot;i++){

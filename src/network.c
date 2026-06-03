@@ -288,6 +288,9 @@ static void RebuildFinalHistory(void){
     int n=network->entities->tot;
     /* Compute Merkle hashes so identical trees can be detected in O(1). */
     for(int i=0;i<n;i++) ComputeHashBottomUp(GetEntity(i)->history);
+    /* Compute vista hashes (top-down) so MergeHistoryTrees can use them
+       as per-node keys, replacing EquivalentNodes' red-edge scan with O(1). */
+    for(int i=0;i<n;i++) ComputeVistaHashTopDown(GetEntity(i)->history);
     for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
         /* The Merkle hash (which excludes red edges) is a fast filter only, not a proof
