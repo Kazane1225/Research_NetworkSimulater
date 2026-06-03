@@ -36,6 +36,9 @@ typedef struct {
 } AppendPerfStats;
 
 static AppendPerfStats appendPerfStats={0};
+static double lastRebuildMs=0.0;
+static double sumRebuildMs=0.0;
+static int rebuildSamples=0;
 static Vector *roundCheckpoints=NULL;
 
 enum { ROUND_CHECKPOINT_INTERVAL = 8 };
@@ -283,6 +286,7 @@ static void ReplayRoundsFrom(int firstRound){
 }
 
 static void RebuildFinalHistory(void){
+    double t0=PerfNowMs();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
     int n=network->entities->tot;
@@ -305,6 +309,8 @@ static void RebuildFinalHistory(void){
         e->finalLeaf = leaf ? leaf : MergeHistoryTrees(finalHistory,e->history,NULL);
     }
     ComputeAuxData(finalHistory);
+    double elapsed=PerfNowMs()-t0;
+    lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
 }
 
 /* Snapshot all entities' current states as "before the last round". */
@@ -945,6 +951,13 @@ EMSCRIPTEN_KEEPALIVE double GetSumAppendTotalMs(void){
 EMSCRIPTEN_KEEPALIVE int GetAppendPerfSamples(void){
     return appendPerfStats.samples;
 }
+
+EMSCRIPTEN_KEEPALIVE void ResetRebuildPerfMetrics(void){
+    lastRebuildMs=0.0; sumRebuildMs=0.0; rebuildSamples=0;
+}
+EMSCRIPTEN_KEEPALIVE double GetLastRebuildMs(void){ return lastRebuildMs; }
+EMSCRIPTEN_KEEPALIVE double GetSumRebuildMs(void)  { return sumRebuildMs;  }
+EMSCRIPTEN_KEEPALIVE int    GetRebuildSamples(void){ return rebuildSamples; }
 
 EMSCRIPTEN_KEEPALIVE int GetCurrentRound(void){
     return currentRound; // 0-based; -1 if no rounds
