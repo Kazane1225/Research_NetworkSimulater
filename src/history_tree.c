@@ -1,5 +1,14 @@
 #include "main.h"
 
+static unsigned long long hash_mix(unsigned long long h,unsigned long long v){
+    h^=v; h*=0x9e3779b97f4a7c15ULL; h^=h>>30; return h;
+}
+static int cmp_ull(const void *a,const void *b){
+    unsigned long long x=*(const unsigned long long*)a;
+    unsigned long long y=*(const unsigned long long*)b;
+    return (x>y)-(x<y);
+}
+
 HistoryTree *NewHistoryTree(void){ // creates new root
     HistoryTree *h=malloc(sizeof(HistoryTree));
     h->input=-1;
@@ -10,6 +19,7 @@ HistoryTree *NewHistoryTree(void){ // creates new root
     h->outdegree=-1;
     h->reference=NULL;
     h->data=NULL;
+    h->vista_hash=0;
     return h;
 }
 
@@ -74,6 +84,38 @@ static bool EquivalentNodes(HistoryTree *h1,HistoryTree *h2){ // used when const
     return true;
 }
 
+static unsigned long long compute_vista_hash_node(HistoryTree *h){
+    unsigned long long vh=0xcbf29ce484222325ULL;
+    vh=hash_mix(vh,(unsigned long long)(h->input+0x8000ULL));
+    vh=hash_mix(vh,(unsigned long long)(h->outdegree+2));
+    vh=hash_mix(vh,h->parent ? h->parent->vista_hash : 0xdeadbeefcafe0000ULL);
+    int nc=h->observations->tot;
+    if(nc>0){
+        unsigned long long *pairs=malloc((size_t)nc*sizeof(unsigned long long));
+        for(int i=0;i<nc;i++){
+            Observation *o=h->observations->items[i];
+            pairs[i]=hash_mix(o->history->vista_hash,(unsigned long long)o->multiplicity);
+        }
+        qsort(pairs,(size_t)nc,sizeof(unsigned long long),cmp_ull);
+        for(int i=0;i<nc;i++)vh=hash_mix(vh,pairs[i]);
+        free(pairs);
+    }
+    return vh?vh:1ULL;
+}
+
+void ComputeVistaHashTopDown(HistoryTree *h){
+    if(!h)return;
+    Queue *q=NewQueue();
+    AppendQueue(q,h);
+    while(!IsQueueEmpty(q)){
+        HistoryTree *node=PopQueue(q);
+        node->vista_hash=compute_vista_hash_node(node);
+        for(int i=0;i<node->children->tot;i++)
+            AppendQueue(q,node->children->items[i]);
+    }
+    FreeQueue(q);
+}
+
 static void ResetReferences(HistoryTree *h){
     h->reference=NULL;
     for(int i=0;i<h->children->tot;i++)
@@ -85,6 +127,7 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
     if(added)*added=false;
     Queue *q=NewQueue();
     h2->reference=h1; // map root of h2 to root of h1
+    if(!h1->vista_hash)h1->vista_hash=compute_vista_hash_node(h1);
     AppendQueue(q,h2); // enqueue root of h2
     while(!IsQueueEmpty(q)){
         HistoryTree *a=PopQueue(q); // the children of node a of h2 have to be mapped to h1
@@ -94,9 +137,16 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
             HistoryTree *x=a->children->items[i];
             HistoryTree *y=NULL;
             AppendQueue(q,x); // enqueue child x of a
+            /* Use vista_hash for fast matching when available */
+            if(!x->vista_hash)x->vista_hash=compute_vista_hash_node(x);
             for(int j=0;j<b->children->tot;j++){ // search for child y of b isomorphic to x
                 HistoryTree *z=b->children->items[j];
-                if(EquivalentNodes(x,z)){ y=z; break; }
+                if(x->vista_hash&&z->vista_hash&&x->vista_hash==z->vista_hash){
+                    y=z; break;
+                }
+                if(!x->vista_hash||!z->vista_hash){
+                    if(EquivalentNodes(x,z)){y=z;break;}
+                }
             }
             if(!y){ // y has not been found
                 if(added)*added=true;
@@ -106,6 +156,7 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
                     AddNewRedEdge(y,o->history->reference,o->multiplicity); // create isomorphic red edge from y
                 }
                 y->outdegree=x->outdegree;
+                y->vista_hash=compute_vista_hash_node(y);
             }
             x->reference=y; // map x to y
         }
@@ -118,6 +169,7 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added){ // 
 
 HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest){ // returns copied tree and deepest node
     HistoryTree *h2=NewHistoryTree();
+    h2->vista_hash=h->vista_hash;
     HistoryTree *au=MergeHistoryTrees(h2,h,NULL);
     if(deepest)*deepest=au;
     return h2;

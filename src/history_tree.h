@@ -12,6 +12,7 @@ typedef struct HistoryTree{
     int outdegree; // messages sent in previous round; -1 if not outAware
     struct HistoryTree *reference; // target of isomorphism (only used when merging history trees)
     void *data; // only used in finalHistory
+    unsigned long long vista_hash;  // top-down vista hash: encodes full isomorphism condition (0 = not computed)
 }HistoryTree;
 
 HistoryTree *NewHistoryTree(void); // creates new root
@@ -23,3 +24,4 @@ HistoryTree *MergeHistoryTrees(HistoryTree *h1,HistoryTree *h2,bool *added); // 
 HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest); // returns copied tree and deepest node
 bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2); // does h1 contain an isomorphic copy of h2?
 bool HistoryTreeEquals(HistoryTree *h1,HistoryTree *h2); // is h1 isomorphic to h2?
+void ComputeVistaHashTopDown(HistoryTree *h); // compute vista hashes top-down for entire subtree

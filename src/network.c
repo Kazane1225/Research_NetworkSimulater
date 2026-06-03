@@ -1,4 +1,4 @@
-#include "main.h"
+﻿#include "main.h"
 
 Network *network=NULL;
 int currentRound=-1;
@@ -96,7 +96,11 @@ void ExecuteNetwork(void){
     }
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
-    for(int i=0;i<network->entities->tot;i++){
+    int n=network->entities->tot;
+    /* Compute vista hashes (top-down) so MergeHistoryTrees can use them
+       for fast per-node matching, skipping EquivalentNodes on hash match. */
+    for(int i=0;i<n;i++) ComputeVistaHashTopDown(GetEntity(i)->history);
+    for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
         e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
     }
