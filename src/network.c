@@ -1,4 +1,4 @@
-#include "main.h"
+﻿#include "main.h"
 
 Network *network=NULL;
 int currentRound=-1;
@@ -134,7 +134,7 @@ void InitNetwork(int type,int n){
     win1->invalid=true;
 }
 
-/* ── incremental execution helpers ─────────────────────────── */
+/* ── incremental execution helpers ────────────────────────────────────────── */
 
 /* Returns the node in copy_root's tree that corresponds to orig_current in orig_root's tree.
    Works by recording the child-index path from orig_current back to orig_root, then following
@@ -290,12 +290,17 @@ static void RebuildFinalHistory(void){
     for(int i=0;i<n;i++) ComputeHashBottomUp(GetEntity(i)->history);
     for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
-        /* If a previous entity has the same tree structure (same root hash),
-           its merge was a no-op for finalHistory — reuse its finalLeaf directly. */
+        /* The Merkle hash (which excludes red edges) is a fast filter only, not a proof
+           of isomorphism.  Two trees with the same black-edge structure but different
+           reception histories can share a hash yet represent distinct equivalence classes.
+           We therefore always follow a hash match with a full structural isomorphism check
+           (HistoryTreeEquals) before reusing a finalLeaf. */
         HistoryTree *leaf=NULL;
         unsigned long long h=e->history->hash;
         for(int j=0;j<i;j++){
-            if(GetEntity(j)->history->hash==h){leaf=GetEntity(j)->finalLeaf;break;}
+            if(GetEntity(j)->history->hash==h && HistoryTreeEquals(GetEntity(j)->history,e->history)){
+                leaf=GetEntity(j)->finalLeaf;break;
+            }
         }
         e->finalLeaf = leaf ? leaf : MergeHistoryTrees(finalHistory,e->history,NULL);
     }
@@ -366,11 +371,11 @@ void ReExecuteLastRound(void){
    Snap is consumed (invalidated) because it no longer describes the new last round. */
 void RollBackLastRound(void){
     if(!SnapshotsValid()){ExecuteNetwork();return;}
-    RestoreFromSnapshots(); /* consumes snap ↁEsnap=NULL */
+    RestoreFromSnapshots(); /* consumes snap 竊・snap=NULL */
     RebuildFinalHistory();
 }
 
-/* ── incremental finalHistory extension ─────────────────────────────────────
+/* ── incremental finalHistory extension ──────────────────────────────────────────
    After appending one new round, the new level-R nodes in finalHistory are fully
    determined by (input, outdegree, red_edges_to_prevFinalLeaf[sender]) for each
    entity.  We collect this info from mailboxes BEFORE EndRound destroys them, then
@@ -413,7 +418,7 @@ static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int 
 }
 
 /* Append the newly added last round on top of the current (already up-to-date) entity states.
-   Extends finalHistory by exactly one level  EO(n²) instead of O(R×n³) full rebuild.
+   Extends finalHistory by exactly one level E・O(n²) instead of O(R×n³) full rebuild.
    Called after InsertRound() appended a round at the end. */
 void AppendLastRound(void){
     int n=network->entities->tot;
