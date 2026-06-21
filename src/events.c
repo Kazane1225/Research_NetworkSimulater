@@ -136,7 +136,8 @@ static void KeyPressed(SDL_Keycode key){
             if(currentRound>=0){
                 Entity *en=FirstEntityCorrespondingToSelectedNode();
                 DeleteInteractions(currentRound);
-                ExecuteNetwork();
+                if(currentRound==network->rounds->tot-1)ReExecuteLastRound();
+                else ExecuteNetwork();
                 if(en)SelectNodeFromEntity(en);
                 numSteps=-1;
                 CountingAlgorithm();
@@ -178,7 +179,8 @@ static void KeyPressed(SDL_Keycode key){
                 e=FirstEntityCorrespondingToSelectedNode();
                 InsertRound(++currentRound,true);
                 if(selectedNodeI!=-1)selectedNodeI++;
-                ExecuteNetwork();
+                if(currentRound==network->rounds->tot-1)AppendLastRound();
+                else ExecuteNetworkFromRound(currentRound);
                 if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
                 CountingAlgorithm();
@@ -194,8 +196,9 @@ static void KeyPressed(SDL_Keycode key){
                 if(currentRound==network->rounds->tot){
                     currentRound--;
                     if(selectedNodeI!=-1)selectedNodeI--;
+                    RollBackLastRound();
                 }
-                ExecuteNetwork();
+                else ExecuteNetworkFromRound(currentRound);
                 if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
                 CountingAlgorithm();
@@ -582,7 +585,8 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
                         AddInteraction(currentRound,selectedEntity,s,mult);
                         if(bothWays && selectedEntity!=s)AddInteraction(currentRound,s,selectedEntity,mult);
                     }
-                    ExecuteNetwork();
+                    if(!allRounds && currentRound==network->rounds->tot-1)ReExecuteLastRound();
+                    else ExecuteNetwork();
                     numSteps=-1;
                     CountingAlgorithm();
                     win1->invalid=true;
