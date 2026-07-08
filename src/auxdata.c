@@ -255,6 +255,50 @@ void AppendAuxDataOneLevel(void){
     ResetAuxDataVariables();
 }
 
+/* Remove the deepest AuxData level (inverse of AppendAuxDataOneLevel).
+   Used after tail rollback or before suffix replay to drop stale levels. */
+void TrimAuxDataOneLevel(void){
+    if(!aux || aux->tot<=1)return;
+    SetWindowContext(win1);
+    int last=aux->tot-1;
+    if(last>0){
+        Vector *prev=GetLevel(last-1);
+        for(int j=0;j<prev->tot;j++){
+            AuxData *pdata=prev->items[j];
+            while(pdata->children->tot)DeleteVectorI(pdata->children,pdata->children->tot-1);
+        }
+    }
+    Vector *deepest=GetLevel(last);
+    for(int j=0;j<deepest->tot;j++){
+        AuxData *data=deepest->items[j];
+        if(data->h)data->h->data=NULL;
+        FreeVectorI(data->children);
+        FreeVectorI(data->observations);
+        FreeVectorI(data->multiplicities);
+        free(data);
+    }
+    FreeVector(deepest);
+    DeleteVector(aux,last);
+    if(aux->tot<=0)return;
+    for(int i=aux->tot-1;i>=0;i--){
+        Vector *v=GetLevel(i);
+        for(int j=0;j<v->tot;j++){
+            AuxData *data=v->items[j];
+            if(!data->children->tot){data->width=1;continue;}
+            data->width=0;
+            for(int k=0;k<data->children->tot;k++)
+                data->width+=GetAuxData(i+1,data->children->items[k])->width;
+        }
+    }
+    ComputeAuxDataCoordinates(0,0,-1.0f,-1.0f,1.0f,1.0f);
+    for(int i=0;i<aux->tot;i++){
+        Vector *v=GetLevel(i);
+        for(int j=0;j<v->tot;j++)((AuxData*)v->items[j])->anonymity=0;
+    }
+    ComputeAuxDataAnonymities();
+    ResetAuxDataVariables();
+}
+
 void FreeAuxData(void){
     if(!aux)return;
     SetWindowContext(win1);
@@ -385,3 +429,21 @@ bool DecrementSelectedNodeJ(void){
     selectedNodeJ--;
     return true;
 }
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE void TestSelectHistoryNode(int j){
+    if(!aux || !network || currentRound<0)return;
+    int si=currentRound+2;
+    if(si<0 || si>=aux->tot)return;
+    Vector *v=GetLevel(si);
+    if(j<0 || j>=v->tot)return;
+    selectedEntity=-1;
+    selectedNodeI=si;
+    selectedNodeJ=j;
+    selectedNode=GetAuxData(si,j);
+    SelectViewHelper(si,j);
+    numSteps=-1;
+    CountingAlgorithm();
+    win1->invalid=true;
+}
+#endif

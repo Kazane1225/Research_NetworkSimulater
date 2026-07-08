@@ -179,9 +179,15 @@ static void KeyPressed(SDL_Keycode key){
                 e=FirstEntityCorrespondingToSelectedNode();
                 InsertRound(++currentRound,true);
                 if(selectedNodeI!=-1)selectedNodeI++;
-                if(currentRound==network->rounds->tot-1)AppendLastRound();
-                else ExecuteNetworkFromRound(currentRound);
-                if(e)SelectNodeFromEntity(e);
+                if(currentRound==network->rounds->tot-1){
+                    AppendLastRound();
+                    if(e)SelectNodeFromEntity(e);
+                } else {
+                    /* Middle/head insert: defer recompute; restore highlight after replay.
+                       Round 0-1 edits use full rebuild (prefix-1 checkpoints go stale). */
+                    MarkNetworkDirtyFromRound(currentRound<=1?0:currentRound);
+                    QueueSelectRestore(e);
+                }
                 numSteps=-1;
                 CountingAlgorithm();
                 win1->invalid=true;
@@ -197,9 +203,12 @@ static void KeyPressed(SDL_Keycode key){
                     currentRound--;
                     if(selectedNodeI!=-1)selectedNodeI--;
                     RollBackLastRound();
+                    if(e)SelectNodeFromEntity(e);
+                } else {
+                    /* Middle/head delete: defer recompute; restore highlight after replay. */
+                    MarkNetworkDirtyFromRound(currentRound<=0?0:currentRound);
+                    QueueSelectRestore(e);
                 }
-                else ExecuteNetworkFromRound(currentRound);
-                if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
                 CountingAlgorithm();
                 win1->invalid=true;
@@ -739,3 +748,13 @@ void Events(void){
         capsPressed=false;
     }
 }
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE void TestInsertRound(void){
+    KeyPressed(SDLK_EQUALS);
+}
+
+EMSCRIPTEN_KEEPALIVE void TestDeleteRound(void){
+    KeyPressed(SDLK_MINUS);
+}
+#endif

@@ -66,6 +66,7 @@ HistoryTree *NewHistoryTree(void){ // creates new root
     h->input=-1;
     h->level=-1;
     h->bornRound=-1;
+    h->maxBornRound=-1;
     h->parent=NULL;
     h->children=NewVector(4);
     h->observations=NewVector(4);
@@ -149,8 +150,11 @@ HistoryTree *AddHistoryTreeChild(HistoryTree *h,int input){ // adds a child node
     h2->input=input;
     h2->level=h->level+1;
     h2->bornRound=currentMutationRound;
+    h2->maxBornRound=currentMutationRound;
     h2->outdegree=outAware?0:-1;
     AddVector(h->children,h2);
+    for(HistoryTree *p=h;p;p=p->parent)
+        if(currentMutationRound>p->maxBornRound)p->maxBornRound=currentMutationRound;
     return h2;
 }
 
@@ -162,8 +166,10 @@ void TrimHistoryTreeToRound(HistoryTree *h,int prefixRound){
     while(stack->tot){
         HistoryTree *node=DeleteVector(stack,stack->tot-1);
         AddVector(post,node);
-        for(int i=0;i<node->children->tot;i++)
-            AddVector(stack,node->children->items[i]);
+        for(int i=0;i<node->children->tot;i++){
+            HistoryTree *child=node->children->items[i];
+            if(child->maxBornRound>prefixRound)AddVector(stack,child);
+        }
     }
     while(post->tot){
         HistoryTree *node=DeleteVector(post,post->tot-1);

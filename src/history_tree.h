@@ -8,6 +8,7 @@ typedef struct HistoryTree{
     int input; // 0: leader
     int level; // level in the history tree (i.e., round number)
     int bornRound; // prefix round when this node was first materialized
+    int maxBornRound; // max bornRound in subtree (for TrimHistoryTreeToRound pruning)
     struct HistoryTree *parent; // parent node
     Vector *children; // children nodes; Vector of HistoryTree
     Vector *observations; // red edges to the previous level; Vector of Observation

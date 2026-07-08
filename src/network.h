@@ -24,6 +24,10 @@ void SortLeaders(void); // put all leaders at the beginning of the list of entit
 void InitNetwork(int type,int n);
 void ExecuteNetwork(void);
 void ExecuteNetworkFromRound(int firstRound); // restore nearest checkpoint and replay suffix from firstRound
+void MarkNetworkDirtyFromRound(int firstRound); // defer recompute: mark simulation dirty from firstRound
+void QueueSelectRestore(Entity *e); // restore history-tree highlight after deferred recompute
+bool IsNetworkDirty(void); // true while a deferred recompute is still pending
+bool EnsureNetworkComputed(void); // run deferred recompute if dirty; returns true iff recompute ran
 void ReExecuteLastRound(void); // re-execute only the last round using saved snapshots
 void RollBackLastRound(void);  // restore to pre-last-round state after last round was deleted
 void AppendLastRound(void);    // apply newly appended last round on top of current entity states
