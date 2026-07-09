@@ -637,7 +637,7 @@ const GUIDED_STEPS_STAB = [
     },
     {
         title: 'Execute One Step',
-        body:  'Press ▶ Step in the toolbar (or Space). The algorithm will look for exposed pairs — agents that mutually observed each other — and start assigning anonymity estimates.',
+        body:  'Press ▶ Step in the toolbar (or Space). The algorithm looks for a non-branching level in your vista and starts assigning anonymity estimates from the leader using red-edge ratios.',
         action: 'Press ▶ Step or Space',
         trigger: () => guidedStepFired,
         highlight: '#btn-step',

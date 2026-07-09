@@ -363,3 +363,37 @@ bool HistoryTreeEquals(HistoryTree *h1,HistoryTree *h2){ // is h1 isomorphic to 
     if(h1->hash && h2->hash && h1->hash!=h2->hash)return false; // O(1) short-circuit via Merkle hash
     return HistoryTreeContains(h1,h2) && HistoryTreeContains(h2,h1);
 }
+
+static unsigned StructFpMix(unsigned h,unsigned v){
+    h^=v;
+    h*=16777619u;
+    return h;
+}
+
+static unsigned HistoryTreeStructFingerprintRec(HistoryTree *h,Vector *memo){
+    if(!h)return 0;
+    for(int i=0;i<memo->tot;i+=2)
+        if(memo->items[i]==h)return (unsigned)(uintptr_t)memo->items[i+1];
+    unsigned fp=2166136261u;
+    fp=StructFpMix(fp,(unsigned)(h->input+1));
+    fp=StructFpMix(fp,(unsigned)(h->level+2));
+    fp=StructFpMix(fp,(unsigned)(h->outdegree+2));
+    fp=StructFpMix(fp,(unsigned)h->children->tot);
+    for(int i=0;i<h->children->tot;i++)
+        fp=StructFpMix(fp,HistoryTreeStructFingerprintRec(h->children->items[i],memo));
+    for(int i=0;i<h->observations->tot;i++){
+        Observation *o=h->observations->items[i];
+        fp=StructFpMix(fp,(unsigned)o->multiplicity);
+        fp=StructFpMix(fp,HistoryTreeStructFingerprintRec(o->history,memo));
+    }
+    AddVector(memo,h);
+    AddVector(memo,(void*)(uintptr_t)fp);
+    return fp;
+}
+
+unsigned HistoryTreeStructFingerprint(HistoryTree *h){
+    Vector *memo=NewVector(64);
+    unsigned fp=HistoryTreeStructFingerprintRec(h,memo);
+    FreeVector(memo);
+    return fp;
+}

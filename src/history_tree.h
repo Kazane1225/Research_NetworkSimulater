@@ -30,3 +30,4 @@ HistoryTree *CopyHistoryTree(HistoryTree *h,HistoryTree **deepest); // returns c
 bool HistoryTreeContains(HistoryTree *h1,HistoryTree *h2); // does h1 contain an isomorphic copy of h2?
 bool HistoryTreeEquals(HistoryTree *h1,HistoryTree *h2); // is h1 isomorphic to h2?
 void ComputeHashBottomUp(HistoryTree *h); // compute Merkle hashes bottom-up for entire subtree
+unsigned HistoryTreeStructFingerprint(HistoryTree *h); // canonical structural fingerprint (for parity tests)

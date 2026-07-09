@@ -11,17 +11,6 @@ int algorithm=0;
 int numSteps=-1;
 
 typedef struct {
-    HistoryTree *current;
-    int outdegree;
-} RoundCheckpointState;
-
-typedef struct {
-    int prefixRounds;
-    int numEntities;
-    RoundCheckpointState *states;
-} RoundCheckpoint;
-
-typedef struct {
     double lastSnapshotMs;
     double lastExecuteMs;
     double lastFinalHistoryMs;
@@ -39,48 +28,6 @@ static AppendPerfStats appendPerfStats={0};
 static double lastRebuildMs=0.0;
 static double sumRebuildMs=0.0;
 static int rebuildSamples=0;
-static Vector *roundCheckpoints=NULL;
-
-/* -1 = clean (simulation is up to date).
-   >=0 = dirty: simulation needs to be re-run from this round before the next
-   display.  Set by MarkNetworkDirtyFromRound(); cleared by EnsureNetworkComputed()
-   or by any direct call to ExecuteNetwork / ExecuteNetworkFromRound. */
-static int dirtyFromRound=-1;
-static Entity *pendingSelectRestore=NULL;
-
-void MarkNetworkDirtyFromRound(int firstRound){
-    if(dirtyFromRound<0 || firstRound<dirtyFromRound) dirtyFromRound=firstRound;
-}
-
-void QueueSelectRestore(Entity *e){
-    pendingSelectRestore=e;
-}
-
-bool IsNetworkDirty(void){
-    return dirtyFromRound>=0;
-}
-
-/* Run any deferred recomputation.  Returns true iff a recompute was performed.
-   Call once per frame (e.g. in MainLoop) before rendering. */
-bool EnsureNetworkComputed(void){
-    if(dirtyFromRound<0) return false;
-    int dirty=dirtyFromRound;
-    dirtyFromRound=-1;
-    if(dirty<=0) ExecuteNetwork();
-    else ExecuteNetworkFromRound(dirty);
-    if(pendingSelectRestore){
-        SelectNodeFromEntity(pendingSelectRestore);
-        pendingSelectRestore=NULL;
-    }
-    return true;
-}
-
-/* Keep enough lightweight checkpoints for middle edits to restart close to the
-   edited round.  Each checkpoint stores only per-entity pointers/outdegree, not
-   copied history trees, so the memory cost stays small compared with HistoryTree
-   storage. */
-enum { ROUND_CHECKPOINT_INTERVAL = 4 };
-enum { ROUND_CHECKPOINT_MAX_STORED = 64 };
 
 static double PerfNowMs(void){
     static double freq=0.0;
@@ -218,130 +165,6 @@ static void FreeEntitySnap(Entity *e){
     }
 }
 
-static void FreeRoundCheckpoint(RoundCheckpoint *cp){
-    if(!cp)return;
-    free(cp->states);
-    free(cp);
-}
-
-static void FreeRoundCheckpoints(void){
-    if(!roundCheckpoints)return;
-    for(int i=0;i<roundCheckpoints->tot;i++)
-        FreeRoundCheckpoint(roundCheckpoints->items[i]);
-    FreeVector(roundCheckpoints);
-    roundCheckpoints=NULL;
-}
-
-static bool HasRoundCheckpoint(int prefixRounds){
-    if(!roundCheckpoints)return false;
-    for(int i=0;i<roundCheckpoints->tot;i++){
-        RoundCheckpoint *cp=roundCheckpoints->items[i];
-        if(cp->prefixRounds==prefixRounds)return true;
-    }
-    return false;
-}
-
-static RoundCheckpoint *CaptureRoundCheckpoint(int prefixRounds){
-    int n=network->entities->tot;
-    RoundCheckpoint *cp=malloc(sizeof(RoundCheckpoint));
-    cp->prefixRounds=prefixRounds;
-    cp->numEntities=n;
-    cp->states=calloc((size_t)n,sizeof(RoundCheckpointState));
-    for(int i=0;i<n;i++){
-        Entity *e=GetEntity(i);
-        cp->states[i].current=e->current;
-        cp->states[i].outdegree=e->outdegree;
-    }
-    return cp;
-}
-
-static void MaybeCaptureRoundCheckpoint(int prefixRounds){
-    /* No upper bound against network->rounds->tot: during pure tail-append growth
-       (AppendLastRound -> ExecuteRoundIncremental), prefixRounds always equals the
-       current tot at the moment of the call, so requiring prefixRounds<tot would
-       silently skip every capture attempt and leave the checkpoint cache stuck at
-       whatever was captured at load time. A checkpoint "at the current tail" is
-       harmless (FindRoundCheckpoint never selects it for the edit that just
-       produced it, since that edit's firstRound is always < tot-1) and becomes a
-       normal, useful interior checkpoint as soon as more rounds are appended after it. */
-    if(prefixRounds<=0)return;
-    if(prefixRounds!=1 && prefixRounds%ROUND_CHECKPOINT_INTERVAL!=0)return;
-    if(!roundCheckpoints)roundCheckpoints=NewVector(8);
-    if(HasRoundCheckpoint(prefixRounds))return;
-    AddVector(roundCheckpoints,CaptureRoundCheckpoint(prefixRounds));
-    while(roundCheckpoints->tot>ROUND_CHECKPOINT_MAX_STORED){
-        int dropIndex=0;
-        RoundCheckpoint *oldest=roundCheckpoints->items[0];
-        if(oldest->prefixRounds==1 && roundCheckpoints->tot>1)dropIndex=1;
-        FreeRoundCheckpoint(DeinsertVector(roundCheckpoints,dropIndex));
-    }
-}
-
-static RoundCheckpoint *FindRoundCheckpoint(int firstRound){
-    RoundCheckpoint *best=NULL;
-    if(!roundCheckpoints)return NULL;
-    for(int i=0;i<roundCheckpoints->tot;i++){
-        RoundCheckpoint *cp=roundCheckpoints->items[i];
-        if(cp->prefixRounds>firstRound)continue;
-        if(!best || cp->prefixRounds>best->prefixRounds)best=cp;
-    }
-    return best;
-}
-
-static void TrimRoundCheckpointsAfter(int prefixRounds){
-    if(!roundCheckpoints)return;
-    Vector *kept=NewVector(8);
-    for(int i=0;i<roundCheckpoints->tot;i++){
-        RoundCheckpoint *cp=roundCheckpoints->items[i];
-        if(cp->prefixRounds<=prefixRounds)AddVector(kept,cp);
-        else FreeRoundCheckpoint(cp);
-    }
-    FreeVector(roundCheckpoints);
-    roundCheckpoints=kept;
-}
-
-static bool RestoreRoundCheckpoint(RoundCheckpoint *cp){
-    if(!cp || cp->numEntities!=network->entities->tot)return false;
-    for(int i=0;i<cp->numEntities;i++){
-        Entity *e=GetEntity(i);
-        HistoryTree *target=cp->states[i].current;
-        int depth=0;
-        for(HistoryTree *n=target;n&&n->parent;n=n->parent)depth++;
-        int *path=depth?malloc((size_t)depth*sizeof(int)):NULL;
-        if(depth){
-            HistoryTree *n=target;
-            for(int d=depth-1;d>=0;d--){
-                HistoryTree *p=n->parent;
-                for(int j=0;j<p->children->tot;j++){
-                    if(p->children->items[j]==n){path[d]=j;break;}
-                }
-                n=p;
-            }
-        }
-        ClearEntityMailbox(e);
-        FreeEntitySnap(e);
-        TrimHistoryTreeToRound(e->history,cp->prefixRounds);
-        HistoryTree *n=e->history;
-        for(int d=0;d<depth&&n;d++){
-            if(path[d]>=n->children->tot){n=NULL;break;}
-            n=n->children->items[path[d]];
-        }
-        if(!n){
-            /* Should be unreachable: maxBornRound-based pruning in TrimHistoryTreeToRound
-               must never remove a node on the path down to a checkpointed entity's own
-               `current` node. Falling back to the tree root avoids a crash, but the
-               displayed round for this entity would be wrong, so surface it loudly. */
-            fprintf(stderr,"RestoreRoundCheckpoint: lost path to entity %d's checkpointed node (prefixRounds=%d); falling back to history root\n",i,cp->prefixRounds);
-            n=e->history;
-        }
-        e->current=n;
-        free(path);
-        e->outdegree=cp->states[i].outdegree;
-        e->finalLeaf=NULL;
-    }
-    return true;
-}
-
 static void RebuildFinalHistory(void);
 static void TakeSnapshotsBeforeRound(void);
 static void InitFinalHistoryFromEntities(void);
@@ -436,7 +259,6 @@ static void ExecuteRoundIncremental(int r){
     for(int i=0;i<n;i++)EndRound(GetEntity(i));
     ExtendFinalHistoryOneLevel(prevFL,infos,counts);
     AppendAuxDataOneLevel();
-    MaybeCaptureRoundCheckpoint(r+1);
     FreeMailboxRedInfo(infos,counts,n);
     free(prevFL);
 }
@@ -489,15 +311,6 @@ static bool TryRestorePrefixViews(int prefixRounds){
     for(int i=0;i<network->entities->tot;i++)
         if(!GetEntity(i)->finalLeaf)return false;
     return true;
-}
-
-static void ReplayRoundsFrom(int prefixRounds){
-    /* Rebuild finalHistory/aux from entity prefix state instead of trimming stale
-       deep aux (which diverged from full ExecuteNetwork on symmetric levels). */
-    RebuildFinalHistory();
-    int R=network->rounds->tot;
-    for(int r=prefixRounds;r<R;r++)
-        ExecuteRoundIncremental(r);
 }
 
 static void RebuildFinalHistory(void){
@@ -602,9 +415,6 @@ void AppendLastRound(void){
 }
 
 void ExecuteNetwork(void){
-    dirtyFromRound=-1;
-    FreeRoundCheckpoints();
-    roundCheckpoints=NewVector(8);
     SetHistoryTreeMutationRound(0);
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
@@ -623,28 +433,11 @@ void ExecuteNetwork(void){
             ExecuteInteraction(v->items[i]);
         for(int i=0;i<network->entities->tot;i++)
             EndRound(GetEntity(i));
-        MaybeCaptureRoundCheckpoint(r+1);
     }
     InitFinalHistoryFromEntities();
 }
 
-void ExecuteNetworkFromRound(int firstRound){
-    dirtyFromRound=-1;
-    RoundCheckpoint *cp;
-    if(firstRound<=0){ExecuteNetwork();return;}
-    cp=FindRoundCheckpoint(firstRound);
-    /* Prefix-1 checkpoints are captured once at tutorial load and go stale after
-       many tail appends; replay from them diverges from full ExecuteNetwork(). */
-    if(!cp || cp->prefixRounds<=1){ExecuteNetwork();return;}
-    if(!RestoreRoundCheckpoint(cp)){ExecuteNetwork();return;}
-    TrimRoundCheckpointsAfter(firstRound);
-    ReplayRoundsFrom(cp->prefixRounds);
-}
-
 void DoneNetwork(void){
-    dirtyFromRound=-1;
-    if(!network)return;
-    FreeRoundCheckpoints();
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NULL;
@@ -750,7 +543,6 @@ int SelectEntityXY(int x,int y){
 }
 
 void CountingAlgorithm(void){
-    if(IsNetworkDirty())return;
     SelectView();
     ResetAuxDataVariables();
     if(selectedNode && selectedNode->h->level>=0)
@@ -864,6 +656,16 @@ void HandleLoadedFile(const char *data,int length){
     if(LoadNetworkHelper(stream) && SDL_CloseIO(stream))DisplayMessage("Network loaded");
     else DisplayMessage("Failed to load network");
     free((void*)data);
+}
+
+EMSCRIPTEN_KEEPALIVE void BenchLoadNetworkText(const char *text){
+    if(!text || !*text)return;
+    DoneNetwork();
+    size_t len=SDL_strlen(text);
+    char *copy=SDL_malloc(len);
+    if(!copy)return;
+    SDL_memcpy(copy,text,len);
+    HandleLoadedFile(copy,(int)len);
 }
 
 EM_JS(void,LoadFileHelper,(void),{
@@ -1207,10 +1009,6 @@ EMSCRIPTEN_KEEPALIVE int GetSelectedNodeJ(void){
     return selectedNodeJ;
 }
 
-EMSCRIPTEN_KEEPALIVE void FlushDeferred(void){
-    EnsureNetworkComputed();
-}
-
 static unsigned SpecHashMix(unsigned h,unsigned v){
     h^=v;
     h*=16777619u;
@@ -1302,5 +1100,43 @@ EMSCRIPTEN_KEEPALIVE int GetAuxCell(int level,int j){
     if(j<0 || j>=v->tot)return -1;
     AuxData *d=v->items[j];
     return d->anonymity*100000+(d->guess+1);
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxCellVisible(int level,int j){
+    if(!aux || level<0 || level>=aux->tot)return -1;
+    Vector *v=GetLevel(level);
+    if(j<0 || j>=v->tot)return -1;
+    return ((AuxData*)v->items[j])->visible?1:0;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned GetVistaVisibleFingerprint(void){
+    unsigned h=2166136261u;
+    if(!aux)return h;
+    for(int i=0;i<aux->tot;i++){
+        Vector *lv=GetLevel(i);
+        h=SpecHashMix(h,(unsigned)lv->tot);
+        for(int j=0;j<lv->tot;j++){
+            AuxData *d=lv->items[j];
+            h=SpecHashMix(h,d->visible?1u:0u);
+            h=SpecHashMix(h,(unsigned)d->anonymity);
+            h=SpecHashMix(h,(unsigned)(d->guess+1));
+        }
+    }
+    return h;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetEntityFinalLeafCell(int agent){
+    if(!network || agent<0 || agent>=network->entities->tot)return -1;
+    Entity *e=GetEntity(agent);
+    if(!e||!e->finalLeaf||!e->finalLeaf->data)return -1;
+    AuxData *d=e->finalLeaf->data;
+    return d->i*100000+d->j;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned GetEntityVistaHash(int agent){
+    if(!network || agent<0 || agent>=network->entities->tot)return 0;
+    Entity *e=GetEntity(agent);
+    if(!e||!e->history)return 0;
+    return HistoryTreeStructFingerprint(e->history);
 }
 #endif

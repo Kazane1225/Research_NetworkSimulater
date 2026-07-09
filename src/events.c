@@ -183,10 +183,8 @@ static void KeyPressed(SDL_Keycode key){
                     AppendLastRound();
                     if(e)SelectNodeFromEntity(e);
                 } else {
-                    /* Middle/head insert: defer recompute; restore highlight after replay.
-                       Round 0-1 edits use full rebuild (prefix-1 checkpoints go stale). */
-                    MarkNetworkDirtyFromRound(currentRound<=1?0:currentRound);
-                    QueueSelectRestore(e);
+                    ExecuteNetwork();
+                    if(e)SelectNodeFromEntity(e);
                 }
                 numSteps=-1;
                 CountingAlgorithm();
@@ -205,9 +203,8 @@ static void KeyPressed(SDL_Keycode key){
                     RollBackLastRound();
                     if(e)SelectNodeFromEntity(e);
                 } else {
-                    /* Middle/head delete: defer recompute; restore highlight after replay. */
-                    MarkNetworkDirtyFromRound(currentRound<=0?0:currentRound);
-                    QueueSelectRestore(e);
+                    ExecuteNetwork();
+                    if(e)SelectNodeFromEntity(e);
                 }
                 numSteps=-1;
                 CountingAlgorithm();
@@ -315,14 +312,14 @@ static void KeyPressed(SDL_Keycode key){
             if(outAware)
                 switch(renderLinks){
                     case 0: DisplayMessage("Display all red edges and outdegrees"); break;
-                    case 1: DisplayMessage("Display red edges and outdegrees in selected view"); break;
+                    case 1: DisplayMessage("Display red edges and outdegrees in selected Vista"); break;
                     case 2: DisplayMessage("Do not display red edges and outdegrees"); break;
                     default: break;
                 }
             else
                 switch(renderLinks){
                     case 0: DisplayMessage("Display all red edges"); break;
-                    case 1: DisplayMessage("Display red edges in selected view"); break;
+                    case 1: DisplayMessage("Display red edges in selected Vista"); break;
                     case 2: DisplayMessage("Do not display red edges"); break;
                     default: break;
                 }

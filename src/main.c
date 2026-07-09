@@ -109,14 +109,6 @@ static void InitSystem(void){
 
 static void MainLoop(void){
     Update();
-    /* Run any recompute deferred by MarkNetworkDirtyFromRound (e.g. from rapid
-       +/- presses).  Multiple dirty marks within one frame collapse into a single
-       replay here, then CountingAlgorithm is re-run on the fresh state. */
-    if(EnsureNetworkComputed()){
-        numSteps=-1;
-        CountingAlgorithm();
-        win1->invalid=true;
-    }
     RenderWindow(win1);
 }
 

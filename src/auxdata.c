@@ -431,6 +431,16 @@ bool DecrementSelectedNodeJ(void){
 }
 
 #ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE void TestSelectEntity(int agent){
+    if(!network || agent<0 || agent>=network->entities->tot)return;
+    selectedEntity=agent;
+    selectedNodeI=selectedNodeJ=-1;
+    SelectView();
+    numSteps=-1;
+    CountingAlgorithm();
+    win1->invalid=true;
+}
+
 EMSCRIPTEN_KEEPALIVE void TestSelectHistoryNode(int j){
     if(!aux || !network || currentRound<0)return;
     int si=currentRound+2;

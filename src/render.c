@@ -3,7 +3,7 @@
 static const char *helpMessage[]={
     "MOUSE COMMANDS",
     "",
-    "Left-click: select/deselect agent or view.",
+    "Left-click: select/deselect agent or Vista.",
     "Mouse wheel up/down: decrement/increment current round.",
     "",
     "NETWORK PANEL",
@@ -19,9 +19,9 @@ static const char *helpMessage[]={
     "",
     "TAB: select counting algorithm.",
     "SPACE: execute counting algorithm step by step.",
-    "ESC: deselect agents and view.",
+    "ESC: deselect agents and Vista.",
     "UP/DOWN: decrement/increment current round.",
-    "LEFT/RIGHT: select different anonymity class.",
+    "LEFT/RIGHT: select different distinguishable class.",
     "BACKSPACE: delete all links in current round.",
     "DEL or U: delete selected agents.",
     "+/-: insert/delete round.",
@@ -37,7 +37,7 @@ static const char *helpMessage[]={
     "L: load network.",
     "S: save network.",
     "",
-    "See https://arxiv.org/abs/2404.02673 for more information."
+    "See History Trees and Their Applications (arxiv.org/abs/2404.02673)."
 };
 
 bool roundNodes=false;

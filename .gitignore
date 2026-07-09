@@ -1,1 +1,25 @@
 /.env
+
+# Local build / agent logs
+*.log
+build_1gb.bat
+build_agent.log
+
+# Browser test & benchmark automation (keep serve.js for serve.bat)
+/scripts/**
+!/scripts/serve.js
+
+# Generated reports & PDF assets from local benchmarking
+/docs/
+
+# Presentation generator & generated slides (local only)
+/presentation/
+Presentation*.pptx
+.~lock.Presentation*.pptx#
+/node_modules/
+
+# Legacy Phase 1 comparison build (removed)
+/website_no_phase1/
+
+# Course lecture slides (local reference material)
+/networkKnowledge/

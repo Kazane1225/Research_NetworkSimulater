@@ -112,7 +112,7 @@
                 <span class="algo-stat-val"><span id="ab-unique">0</span> / <span id="ab-agents">?</span> <span data-i18n="bannerAgents">agents</span></span>
             </div>
             <div class="algo-stat">
-                <span class="algo-stat-label" data-i18n="bannerClasses">Distinguishable classes</span>
+                <span class="algo-stat-label" data-i18n="bannerClasses">Anonymity classes</span>
                 <span class="algo-stat-val" id="ab-classes">—</span>
             </div>
             <div class="algo-stat">
@@ -148,7 +148,7 @@
             <span class="stats-label" data-i18n="statsLeaders">Leaders</span>                           <span class="stats-val" id="stat-leaders">—</span>
             <span class="stats-label"><span data-i18n="statsRounds">Rounds</span> <em>(T)</em></span>   <span class="stats-val" id="stat-rounds">—</span>
             <span class="stats-label" data-i18n="statsLinks">Links (this round)</span>                 <span class="stats-val" id="stat-links">—</span>
-            <span class="stats-label" data-i18n="statsClasses">Distinguishable classes</span>               <span class="stats-val" id="stat-classes">—</span>
+            <span class="stats-label" data-i18n="statsClasses">Anonymity classes</span>               <span class="stats-val" id="stat-classes">—</span>
             <span class="stats-label" data-i18n="statsUnique">Uniquely identified</span>              <span class="stats-val" id="stat-unique">—</span>
         </div>
     </div>
@@ -181,8 +181,8 @@
         <h3>Navigation</h3>
         <table>
             <tr><td>↑ / ↓</td><td>Previous / next round</td></tr>
-            <tr><td>← / →</td><td>Previous / next distinguishable class in current Vista</td></tr>
-            <tr><td>ESC</td><td>Deselect agents and clear Vista selection</td></tr>
+            <tr><td>← / →</td><td>Previous / next anonymity class in current view</td></tr>
+            <tr><td>ESC</td><td>Deselect agents and clear view selection</td></tr>
         </table>
 
         <h3>Network Editing</h3>
@@ -214,14 +214,14 @@
         <table>
             <tr><td>O</td><td>Toggle outdegree awareness of agents</td></tr>
             <tr><td>A</td><td>Toggle arrowheads on edges</td></tr>
-            <tr><td>D</td><td>Cycle red-edge draw mode: all → selected Vista → hidden</td></tr>
+            <tr><td>D</td><td>Cycle red-edge draw mode: all → selected view → hidden</td></tr>
             <tr><td>B</td><td>Toggle round / square nodes</td></tr>
             <tr><td>C</td><td>Toggle grey highlight bar on current level</td></tr>
             <tr><td>H</td><td>Show this reference</td></tr>
         </table>
 
         <div id="help-ref">
-            Further reading: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a> (Viglietta, arXiv 2024)
+            Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a>
         </div>
         </div><!-- #help-content -->
     </div>
@@ -234,7 +234,70 @@
             <h2 data-i18n="glossaryTitle">Anonymous Dynamic Networks — Glossary</h2>
             <button id="glossary-close" data-i18n="glossaryClose">✕ Close</button>
         </div>
-        <div id="glossary-content" data-i18n-html="glossaryContent"></div>
+        <div id="glossary-content" data-i18n-html="glossaryContent">
+            <div class="gl-term">Agent</div>
+            <div class="gl-def">A computing entity in the network. Agents have no unique identifiers — they are <em>anonymous</em>. Each agent starts with an integer <em>input</em> value (0 = leader).</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Leader</div>
+            <div class="gl-def">A special agent with input 0, shown as <strong>L</strong> in the simulator. Counting algorithms use the leader as a reference point to determine the total number of agents <em>n</em>.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Dynamic Network</div>
+            <div class="gl-def">A network whose communication links can change every round. Unlike static networks, edges are not permanent — they may be controlled by an adversary. The key challenge is that agents cannot rely on a fixed topology.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Round</div>
+            <div class="gl-def">One time step of communication. In each round a set of directed links is active and agents exchange messages only along those links. Use <strong>↑ / ↓</strong> or the scroll wheel to browse rounds in the simulator.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Interaction (Link)</div>
+            <div class="gl-def">A directed edge from agent A to agent B in a given round: A sends a message to B. The <em>multiplicity</em> counts how many parallel copies of the message are sent, which matters for the counting algorithms.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">History Tree</div>
+            <div class="gl-def">A tree that records everything an agent has observed so far. The root is the initial state; each level adds one more round of observations. Two agents are <em>indistinguishable</em> if and only if they share the same history tree. The right panel of the simulator visualises this tree.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Anonymity Class</div>
+            <div class="gl-def">A group of agents with <em>identical</em> history trees — they cannot tell each other apart. The size of the class is its <em>anonymity</em>. An anonymity of 1 means the agent is uniquely identifiable by its history.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Counting Problem</div>
+            <div class="gl-def">The task of determining the total number of agents <em>n</em>. Because agents are anonymous they cannot simply count themselves — they must deduce <em>n</em> from the patterns of messages received over multiple rounds.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Stabilizing Algorithm</div>
+            <div class="gl-def">An algorithm that eventually outputs the correct answer and <em>never changes it again</em>, but may output wrong values before it stabilises. The simulator's stabilizing algorithm is guaranteed to stabilise by round 2n − 2. Select it with the <strong>Stabilizing</strong> button.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Terminating Algorithm</div>
+            <div class="gl-def">An algorithm that outputs the correct answer and then <em>halts</em>, explicitly signalling that it is done. This is a stronger guarantee than stabilizing: once it stops, the answer is provably correct. Select it with the <strong>Terminating</strong> button.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Outdegree Awareness</div>
+            <div class="gl-def">An optional capability (toggle with <strong>O</strong>) where each agent also knows how many messages it <em>sent</em> in the previous round. This extra information can help the algorithm make faster or more accurate guesses.</div>
+        </div>
+
+        <div class="gl-entry">
+            <div class="gl-term">Exposed Pair</div>
+            <div class="gl-def">Two agents A and B such that A observes B and B observes A with matching multiplicities. Exposed pairs are the key mechanism the stabilizing algorithm uses to propagate anonymity estimates across the network.</div>
+        </div>
+
+        <div id="glossary-ref">
+            Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a>
+        </div>
+        </div><!-- #glossary-content -->
     </div>
 </div>
 
