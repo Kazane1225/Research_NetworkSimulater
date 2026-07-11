@@ -590,7 +590,7 @@ function prepareLearnNetwork() {
 let guidedStep     = 0;
 let guidedScenario = 0;
 let guidedOpen     = false;
-let guidedHighlightEl = null;
+let guidedHighlightEls = [];
 let guidedPollTimer   = null;
 
 const guidedPanel     = document.getElementById('guided-panel');
@@ -599,6 +599,7 @@ const guidedTitleEl   = document.getElementById('guided-title');
 const guidedBodyEl    = document.getElementById('guided-body');
 const guidedActionDiv = document.getElementById('guided-action');
 const guidedActionTxt = document.getElementById('guided-action-text');
+const guidedPrevBtn   = document.getElementById('guided-prev');
 const guidedSkipBtn   = document.getElementById('guided-skip');
 const guidedNextBtn   = document.getElementById('guided-next');
 const guidedCloseBtn  = document.getElementById('guided-close');
@@ -607,27 +608,39 @@ const stepCommentaryEl = document.getElementById('step-commentary');
 const stepToastEl      = document.getElementById('step-toast');
 
 function clearGuidedHighlight() {
-    if (guidedHighlightEl) {
-        guidedHighlightEl.classList.remove('guided-highlight');
-        guidedHighlightEl = null;
-    }
+    guidedHighlightEls.forEach(el => {
+        el.classList.remove('guided-highlight');
+        // Legend visibility is owned by syncLegend(); leave it alone here.
+    });
+    guidedHighlightEls = [];
 }
 
 function applyGuidedHighlight(sel) {
     clearGuidedHighlight();
     if (!sel) return;
-    const el = document.querySelector(sel);
-    if (el) { el.classList.add('guided-highlight'); guidedHighlightEl = el; }
+    const selectors = Array.isArray(sel)
+        ? sel
+        : String(sel).split(',').map(s => s.trim()).filter(Boolean);
+    for (const s of selectors) {
+        const el = document.querySelector(s);
+        if (!el) continue;
+        el.classList.add('guided-highlight');
+        // Colour steps may mention the legend before/while it is shown.
+        if (el.id === 'node-legend') el.classList.add('visible');
+        guidedHighlightEls.push(el);
+    }
 }
 
 function renderGuidedStep() {
     const steps  = getScenarios()[guidedScenario].steps;
     const s      = steps[guidedStep];
     const isLast = guidedStep === steps.length - 1;
+    const Lui    = getLocale().ui;
 
     guidedIndicator.textContent = `${guidedStep + 1} / ${steps.length}`;
     guidedTitleEl.textContent   = s.title;
     guidedBodyEl .textContent   = s.body;
+    guidedBodyEl.scrollTop      = 0;
 
     if (s.action) {
         guidedActionDiv.style.display = '';
@@ -636,13 +649,16 @@ function renderGuidedStep() {
         guidedActionDiv.style.display = 'none';
     }
 
+    guidedPrevBtn.disabled = (guidedStep === 0);
+
     if (s.trigger) {
         guidedSkipBtn.style.display = '';
+        guidedSkipBtn.textContent   = Lui.guidedSkip;
         guidedNextBtn.style.display = 'none';
     } else {
         guidedSkipBtn.style.display = 'none';
         guidedNextBtn.style.display = '';
-        guidedNextBtn.textContent   = isLast ? getLocale().ui.guidedDone : getLocale().ui.guidedNext;
+        guidedNextBtn.textContent   = isLast ? Lui.guidedDone : Lui.guidedNext;
     }
 
     stepCommentaryEl.style.display = 'none';
@@ -658,6 +674,13 @@ function advanceGuided() {
     } else {
         closeGuided();
     }
+}
+
+function retreatGuided() {
+    if (guidedStep <= 0) return;
+    guidedStepFired = false;
+    guidedStep--;
+    renderGuidedStep();
 }
 
 function startGuidedPoll() {
@@ -698,10 +721,12 @@ function closeGuided() {
     clearGuidedHighlight();
     stepCommentaryEl.style.display = 'none';
     if (guidedPollTimer) { clearInterval(guidedPollTimer); guidedPollTimer = null; }
+    syncLegend();
 }
 
 learnToggleBtn.addEventListener('click', () => { if (guidedOpen) closeGuided(); else openGuided(); });
 guidedCloseBtn.addEventListener('click', closeGuided);
+guidedPrevBtn .addEventListener('click', retreatGuided);
 guidedSkipBtn .addEventListener('click', advanceGuided);
 guidedNextBtn .addEventListener('click', advanceGuided);
 

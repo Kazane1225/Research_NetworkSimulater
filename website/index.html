@@ -329,13 +329,16 @@
     <div id="guided-title"></div>
     <div id="guided-body"></div>
     <div id="guided-action" style="display:none">
-        <span id="guided-action-icon">&#128075;</span>
+        <span id="guided-action-icon" aria-hidden="true">&#9654;</span>
         <span id="guided-action-text"></span>
     </div>
     <div id="step-commentary" style="display:none"></div>
     <div id="guided-footer">
-        <button class="tut-btn" id="guided-skip" data-i18n="guidedSkip">Skip →→</button>
-        <button class="tut-btn tut-primary" id="guided-next" style="display:none">Next →</button>
+        <button class="tut-btn" id="guided-prev" data-i18n="guidedPrev">← Prev</button>
+        <div id="guided-footer-right">
+            <button class="tut-btn" id="guided-skip" data-i18n="guidedSkip">Skip action →</button>
+            <button class="tut-btn tut-primary" id="guided-next" style="display:none">Next →</button>
+        </div>
     </div>
 </div>
 
