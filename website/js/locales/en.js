@@ -7,13 +7,13 @@ const LOCALE_EN = {
         null,
         {
             title:      'Stabilizing Counting Algorithm',
-            desc:       'Agents broadcast their vistas each round. The algorithm finds the first non-branching level in its vista and uses red-edge multiplicity ratios to propagate anonymity estimates from the leader outward. It may output wrong guesses at first, but is guaranteed to stabilise on the correct count n by round 2n \u2212 2.',
+            desc:       'Agents exchange vistas each round. The algorithm finds the first non-branching level in its vista and uses red-edge multiplicity ratios to propagate anonymity estimates from the leader. Early guesses may be wrong, but the output is guaranteed to stabilise on the correct count n by round 2n \u2212 2.',
             boundLabel: 'Stabilizes by round',
             bound:      n => n > 0 ? `2n \u2212 2 = ${2 * n - 2}` : '\u2014',
         },
         {
             title:      'Terminating Counting Algorithm',
-            desc:       'A stronger variant: the algorithm explicitly halts and signals \u201cdone\u201d when it is certain the count is correct. It builds complete \u2018isles\u2019 of counted agents before announcing the result, so no incorrect output is ever committed to.',
+            desc:       'A stronger variant: the algorithm halts only after a correctness certificate (guessers, heavy nodes, and verified isles/cuts). It never commits an incorrect answer. The cost is a later bound: termination by round 3n \u2212 3.',
             boundLabel: 'Terminates by round',
             bound:      n => n > 0 ? `3n \u2212 3 = ${3 * n - 3}` : '\u2014',
         },
@@ -31,29 +31,25 @@ const LOCALE_EN = {
     ],
 
     guidedStab: [
-        { title: 'Welcome \u2014 Let\u2019s Count!',              body: 'We\u2019ve loaded a small example network: 6 agents across 5 rounds. Your goal is to understand how the Stabilizing counting algorithm works \u2014 all without knowing any agent\u2019s identity.',                                                                                                                     action: null,                                                        highlight: null            },
-        { title: 'Agents are Anonymous',                          body: 'The circles in the left panel are agents. They have no names or IDs. The only exception is the L (leader), which has a special starting input of 0. All other agents start with input 1 and are completely identical at first.',                                                                                        action: null,                                                        highlight: null            },
-        { title: 'Round 1: A Ring',                               body: 'The network starts as a ring: L \u2014 1 \u2014 2 \u2014 3 \u2014 4 \u2014 5 \u2014 L. Agents 1 & 5 are symmetric (both next to L), and agents 2, 3, 4 are also symmetric. The algorithm will have to resolve this ambiguity!',                                                                                           action: null,                                                        highlight: null            },
-        { title: 'Advance to Round 2',                            body: 'Press \u2193 or scroll the mouse wheel on the canvas to go to Round 2. Notice which agents the leader L is now connected to \u2014 the topology is already different!',                                                                                                                                                action: 'Press \u2193 or scroll to advance',                         highlight: '#btn-next-round' },
-        { title: 'The Network is Dynamic!',                       body: 'The links changed \u2014 a different set of connections is active. This is what makes the network dynamic: an adversary can rewire it each round. Notice the History Tree (right panel) grew one level.',                                                                                                              action: null,                                                        highlight: null            },
-        { title: 'Advance to Round 3',                            body: 'Press \u2193 once more to reach Round 3. The leader L now connects to agents it did not reach before \u2014 this is how the network stays unpredictable.',                                                                                                                                                           action: 'Press \u2193 or scroll to advance',                         highlight: '#btn-next-round' },
-        { title: 'Five Dynamic Rounds',                           body: 'This network has 5 rounds \u2014 advance to Round 5 using \u2193. The History Tree grows one level per round; different observation patterns make agents distinguishable.',                                                          action: 'Press \u2193 or scroll to reach Round 5',                  highlight: '#btn-next-round' },
-        { title: 'Enable the Stabilizing Algorithm',              body: 'Time to count! Click the Stabilizing button in the toolbar. A description banner will appear explaining the algorithm and its theoretical guarantee.',                                                                                                                                                              action: 'Click the Stabilizing button',                              highlight: '.algo-group'   },
-        { title: 'Select an Agent',                               body: 'Left-click any agent (circle) in the left panel to select it. The algorithm needs a starting Vista to work from.',                                                                                                                                                                                                   action: 'Left-click any agent in the left panel',                    highlight: null            },
-        { title: 'Execute One Step',                              body: 'Press \u25b6 Step in the toolbar (or Space). The algorithm looks for a non-branching level in your vista and starts assigning anonymity estimates from the leader using red-edge ratios.',                                                                                                                              action: 'Press \u25b6 Step or Space',                                highlight: '#btn-step'     },
-        { title: 'Colors Changed!',                               body: 'Look at the History Tree: L turns green immediately (it is unique). Agents 1 & 5 and agents 2, 3 & 4 start YELLOW \u2014 the algorithm recognises they are indistinguishable in round 1, so it can only guess. Keep stepping to watch it resolve the ambiguity.',                                                    action: null,                                                        highlight: null            },
-        { title: 'Keep Stepping Until Done',                      body: 'Press \u25b6 Step several more times. Watch the root node of the History Tree \u2014 when it turns green and shows \u201c6\u201d, the algorithm has stabilized and correctly determined n = 6!',                                                                                                                       action: 'Keep pressing \u25b6 Step until the root node turns green', highlight: '#btn-step'     },
-        { title: '\ud83c\udf89 n = 6 Counted Successfully!',      body: 'The root node shows 6 \u2014 the stabilizing algorithm has correctly determined n = 6! Try the Terminating tab above to see a stronger variant with a different guarantee.',                                                                                                                                         action: null,                                                        highlight: null            },
+        { title: 'Stabilizing vs Terminating',                    body: 'Learn focuses on what makes the two counting algorithms different. We start with Stabilizing: it may show provisional (even wrong) guesses, then settle on the correct n. It never announces \u201cdone\u201d. Tour covers the UI if you need a refresher.',                                                                 action: null,                                                        highlight: null            },
+        { title: 'This Demo Network',                             body: 'Six agents, five dynamic rounds. L is the unique leader (input 0); the others start identical. Early on, some agents stay indistinguishable, so any count based on incomplete evidence can only be a guess.',                                                                                                               action: null,                                                        highlight: null            },
+        { title: 'Enable Stabilizing',                            body: 'Click Stabilizing. The banner shows the guarantee: the output stabilises by round 2n \u2212 2 (here at most 10). Stabilising means the value stops changing \u2014 not that the algorithm halts.',                                                                                                                       action: 'Click the Stabilizing button',                              highlight: '.algo-group'   },
+        { title: 'Select an Agent',                               body: 'Left-click any agent on the left. The algorithm runs on that agent\u2019s vista (its partial history tree).',                                                                                                                                                                                                        action: 'Left-click any agent in the left panel',                    highlight: null            },
+        { title: 'Take One Step',                                 body: 'Press \u25b6 Step (or Space). The algorithm looks for a non-branching level and spreads anonymity estimates from the leader using red-edge ratios. Watch the History Tree colours change.',                                                                                                                             action: 'Press \u25b6 Step or Space',                                highlight: '#btn-step'     },
+        { title: 'Provisional Guesses',                           body: 'L turns green (anonymity 1). Symmetric groups often start yellow \u2014 guesses, not proven facts. Red means an incorrect guess. Stabilizing is allowed to be wrong before it settles; that is the defining risk. Check the colour legend (bottom-right).',                                              action: null,                                                        highlight: '#node-legend'  },
+        { title: 'Why Not Halt Here?',                            body: 'A vista can look \u201cfinished\u201d while still missing agents or links. Stopping as soon as a plausible n appears can lock in a wrong answer. Stabilizing therefore keeps going until the value stops changing \u2014 it has no halt certificate.',                                                                      action: null,                                                        highlight: null            },
+        { title: 'Step Until It Settles',                         body: 'Keep pressing \u25b6 Step. When the History Tree root turns green and shows 6, the guess has stabilised on n = 6. The algorithm still does not halt; it simply will not change that answer later (within the bound).',                                                                                                 action: 'Keep pressing \u25b6 Step until the root shows 6 in green', highlight: '#btn-step'     },
+        { title: 'Stabilized \u2014 No \u201cDone\u201d Signal', body: 'Stabilizing reached the correct count, but never proved it was safe to stop. Open the Terminating tab to see the stronger guarantee: halt only after a certificate, at the cost of a later round bound (3n \u2212 3).',                                                                                                   action: null,                                                        highlight: null            },
     ],
 
     guidedTerm: [
-        { title: 'Terminating \u2014 Stronger Guarantee',         body: 'Unlike Stabilizing (which may briefly show wrong values), the Terminating algorithm halts explicitly and only ever outputs the correct answer. Cost: it terminates by round 3n \u2212 3 instead of 2n \u2212 2. Same 6-agent network is loaded.',                                                                        action: null,                                                        highlight: null            },
-        { title: 'Enable Terminating Algorithm',                  body: 'Click the Terminating button in the toolbar. The banner will update to show the 3n \u2212 3 bound. For n = 6 that is at most 15 rounds.',                                                                                                                                                                           action: 'Click the Terminating button',                              highlight: '.algo-group'   },
-        { title: 'Select an Agent',                               body: 'Left-click any agent in the left panel. The algorithm searches for verifiable evidence on the selected agent\u2019s Vista.',                                                                                                                                                         action: 'Left-click any agent',                                      highlight: null            },
-        { title: 'First Step \u2014 Watch the Colours',           body: 'Press \u25b6 Step. Watch History Tree colours: cyan = initial-level guess (uncommitted), orange = intermediate refinement. Key point: no node ever turns red \u2014 the algorithm never commits to a wrong answer.',                                                                                           action: 'Press \u25b6 Step or Space',                                highlight: '#btn-step'     },
-        { title: 'Building Isles',                                body: 'The Terminating algorithm builds \u201cisles\u201d \u2014 groups of agents whose combined evidence mutually confirms the count. Orange nodes are isles being refined. Only when an isle is fully verified does the root commit (turn green). Keep stepping.',                                                           action: null,                                                        highlight: null            },
-        { title: 'Step to Termination',                           body: 'Press \u25b6 Step repeatedly. Each step propagates evidence from newly seen agents. When the algorithm is certain, the root turns green and halts \u2014 no further step will ever change it.',                                                                                                                        action: 'Press \u25b6 Step until the root turns green with n = 6',  highlight: '#btn-step'     },
-        { title: '\ud83c\udf89 Terminated \u2014 n = 6!',         body: 'The Terminating algorithm has halted with the provably correct answer n = 6. Unlike Stabilizing, no incorrect output ever appeared. Switch back to the Stabilizing tab and compare the number of steps and round bounds.',                                                                                          action: null,                                                        highlight: null            },
+        { title: 'Terminating: Halt With a Proof',                body: 'Terminating only outputs n when evidence proves the count is correct, then stops. Unlike Stabilizing, it never commits a wrong answer. The trade-off: it may need more rounds (bound 3n \u2212 3 instead of 2n \u2212 2). Same 6-agent network.',                                                                          action: null,                                                        highlight: null            },
+        { title: 'Enable Terminating',                            body: 'Click Terminating. The banner updates to the 3n \u2212 3 bound (at most 15 rounds for n = 6).',                                                                                                                                                                                                                     action: 'Click the Terminating button',                              highlight: '.algo-group'   },
+        { title: 'Select an Agent',                               body: 'Left-click any agent. The algorithm searches that agent\u2019s vista for verifiable structure \u2014 not just a plausible number.',                                                                                                                                                                                  action: 'Left-click any agent',                                      highlight: null            },
+        { title: 'Watch Uncommitted Colours',                     body: 'Press \u25b6 Step. Cyan marks an early, uncommitted guess; orange marks intermediate refinement. Nodes do not turn red: the algorithm refuses to lock in an incorrect answer. Match colours with the legend (bottom-right).',                                                                                          action: 'Press \u25b6 Step or Space',                                highlight: '#btn-step, #node-legend' },
+        { title: 'Certificates, Not Just Guesses',                body: 'Terminating builds evidence step by step: guessers seed anonymity estimates, heavy nodes check consistency, and verified isles or cuts act as a certificate. Only then may the root turn green and halt.',                                                                                                           action: null,                                                        highlight: '#label-history' },
+        { title: 'Step Until It Halts',                           body: 'Keep pressing \u25b6 Step. When the root turns green with 6, the algorithm has terminated: the answer is provably correct and will not change.',                                                                                                                                                                     action: 'Press \u25b6 Step until the root turns green with n = 6',  highlight: '#btn-step'     },
+        { title: 'Compare the Two Guarantees',                    body: 'Stabilizing: may be wrong early; settles by 2n \u2212 2; no halt signal. Terminating: never commits a wrong answer; halts with a certificate; bound 3n \u2212 3. Same counting problem, different promises. Switch tabs anytime to compare.',                                                                            action: null,                                                        highlight: null            },
     ],
 
     commentary: {
@@ -111,21 +107,22 @@ const LOCALE_EN = {
         statsLeaders: 'Leaders',
         statsRounds:  'Rounds',
         statsLinks:   'Links (this round)',
-        statsClasses: 'Distinguishable classes',
+        statsClasses: 'Anonymity classes',
         statsUnique:  'Uniquely identified',
         // Algorithm banner
-        bannerHint:    'Select an agent or History Tree node, then press <kbd>Space</kbd> (or <strong>\u25b6 Step</strong>) to execute one step.',
+        bannerHint:    'Select an agent or history-tree node, then press <kbd>Space</kbd> (or <strong>\u25b6 Step</strong>) to execute one step.',
         bannerUniq:    'Uniquely identified',
         bannerAgents:  'agents',
-        bannerClasses: 'Distinguishable classes',
+        bannerClasses: 'Anonymity classes',
         // Tutorial (Tour) panel
         tutPrev: '\u2190 Prev',
         tutNext: 'Next \u2192',
         tutDone: '\u2713 Done',
         // Guided (Learn) panel
         guidedBadge: '\ud83c\udf93 Learn',
-        guidedSkip:  'Skip \u2192\u2192',
+        guidedSkip:  'Skip action \u2192',
         guidedNext:  'Next \u2192',
+        guidedPrev:  '\u2190 Prev',
         guidedDone:  '\u2713 Done',
         // Misc messages
         wasmNotReady: 'WASM not yet ready \u2014 please wait a moment and try again.',
@@ -150,8 +147,8 @@ const LOCALE_EN = {
 <h3>Navigation</h3>
 <table>
 <tr><td>\u2191 / \u2193</td><td>Previous / next round</td></tr>
-<tr><td>\u2190 / \u2192</td><td>Previous / next distinguishable class in current Vista</td></tr>
-<tr><td>ESC</td><td>Deselect agents and clear Vista selection</td></tr>
+<tr><td>\u2190 / \u2192</td><td>Previous / next anonymity class in current view</td></tr>
+<tr><td>ESC</td><td>Deselect agents and clear view selection</td></tr>
 </table>
 <h3>Network Editing</h3>
 <table>
@@ -180,12 +177,12 @@ const LOCALE_EN = {
 <table>
 <tr><td>O</td><td>Toggle outdegree awareness of agents</td></tr>
 <tr><td>A</td><td>Toggle arrowheads on edges</td></tr>
-<tr><td>D</td><td>Cycle red-edge draw mode: all \u2192 selected Vista \u2192 hidden</td></tr>
+<tr><td>D</td><td>Cycle red-edge draw mode: all \u2192 selected view \u2192 hidden</td></tr>
 <tr><td>B</td><td>Toggle round / square nodes</td></tr>
 <tr><td>C</td><td>Toggle grey highlight bar on current level</td></tr>
 <tr><td>H</td><td>Show this reference</td></tr>
 </table>
-<div id="help-ref">Further reading: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a> (Viglietta, arXiv 2024)</div>`,
+<div id="help-ref">Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a></div>`,
         // Glossary modal
         glossaryTitle: 'Anonymous Dynamic Networks \u2014 Glossary',
         glossaryClose: '\u2715 Close',
@@ -198,10 +195,11 @@ const LOCALE_EN = {
 <div class="gl-entry"><div class="gl-term">Vista</div><div class="gl-def">Each agent\u2019s <strong>partial</strong> history tree \u2014 everything that agent has observed so far. It expands each round as agents exchange messages. In the simulator, select an agent or History Tree node to highlight its vista (bright nodes and edges).</div></div>
 <div class="gl-entry"><div class="gl-term">Distinguishable Class</div><div class="gl-def">A group of agents that are indistinguishable at a given time. Each node in the History Tree represents one class; the node\u2019s <em>anonymity</em> is the class size (number of agents in that class). An anonymity of 1 means the agent is uniquely identifiable.</div></div>
 <div class="gl-entry"><div class="gl-term">Counting Problem</div><div class="gl-def">The task of determining the total number of agents <em>n</em>. Because agents are anonymous they cannot simply count themselves \u2014 they must deduce <em>n</em> from the patterns of messages received over multiple rounds.</div></div>
-<div class="gl-entry"><div class="gl-term">Stabilizing Algorithm</div><div class="gl-def">An algorithm that eventually outputs the correct answer and <em>never changes it again</em>, but may output wrong values before it stabilises. The simulator\u2019s stabilizing algorithm is guaranteed to stabilise by round 2n \u2212 2. Select it with the <strong>Stabilizing</strong> button.</div></div>
-<div class="gl-entry"><div class="gl-term">Terminating Algorithm</div><div class="gl-def">An algorithm that outputs the correct answer and then <em>halts</em>, explicitly signalling that it is done. This is a stronger guarantee than stabilizing: once it stops, the answer is provably correct. Select it with the <strong>Terminating</strong> button.</div></div>
+<div class="gl-entry"><div class="gl-term">Stabilizing Algorithm</div><div class="gl-def">Eventually outputs the correct answer and <em>never changes it again</em>, but may output wrong values before it settles. It has no halt signal. Guaranteed to stabilise by round 2n \u2212 2. Select <strong>Stabilizing</strong>.</div></div>
+<div class="gl-entry"><div class="gl-term">Terminating Algorithm</div><div class="gl-def">Outputs the correct answer and then <em>halts</em> with a correctness certificate. Stronger than stabilizing: once it stops, the answer is proven correct. Bound 3n \u2212 3. Select <strong>Terminating</strong>.</div></div>
 <div class="gl-entry"><div class="gl-term">Outdegree Awareness</div><div class="gl-def">An optional capability (toggle with <strong>O</strong>) where each agent also knows how many messages it <em>sent</em> in the previous round. This extra information can help the algorithm make faster or more accurate guesses.</div></div>
 <div class="gl-entry"><div class="gl-term">Non-Branching Level</div><div class="gl-def">A level in the History Tree where every node has exactly one child (no branching). When red edges connect two such nodes to each other\u2019s child, the ratio of multiplicities equals the ratio of anonymities. The stabilizing algorithm uses the first non-branching level in its vista to propagate anonymity guesses from the leader outward.</div></div>
+<div class="gl-entry"><div class="gl-term">Isle / Cut (Terminating)</div><div class="gl-def">Verified structure in a vista used as a correctness certificate. Terminating builds guesses via guessers and heavy nodes, then commits only after an isle or cut confirms the count.</div></div>
 <div id="glossary-ref">Further reading: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a> (Viglietta, arXiv 2024)</div>`,
     },
 };

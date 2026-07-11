@@ -7,13 +7,13 @@ const LOCALE_JA = {
         null,
         {
             title:      '安定化カウントアルゴリズム',
-            desc:       '各ラウンド、エージェントは自分の Vista を近傍に送ります。アルゴリズムは Vista 内の最初の non-branching level（分岐なしレベル）を見つけ、赤エッジの多重度比からリーダーを起点に匿名性の推定値を伝播させます。最初は誤った推定値を出力することがありますが、ラウンド 2n \u2212 2 までに正しいカウント n に安定することが保証されています。',
+            desc:       '各ラウンドでエージェントは Vista を交換します。アルゴリズムは Vista 内の最初の non-branching level を見つけ、赤辺の多重度の比を使ってリーダーから匿名性の推定を広げます。途中の推定は間違うことがありますが、ラウンド 2n \u2212 2 までには正しい n に安定することが保証されます。',
             boundLabel: '安定するラウンド',
             bound:      n => n > 0 ? `2n \u2212 2 = ${2 * n - 2}` : '\u2014',
         },
         {
             title:      '終了型カウントアルゴリズム',
-            desc:       'より強力なバリアント：アルゴリズムはカウントが正しいと確信したとき、明示的に停止して「完了」を通知します。結果を発表する前に、カウント済みエージェントの完全な「島（isle）」を構築するため、誤った出力がコミットされることは一切ありません。',
+            desc:       'より強い保証です。guesser・heavy node・検証済みの isle/cut といった正しさの証明書が揃うまで停止しません。誤った答えを確定することはありません。その代わり上界は遅く、ラウンド 3n \u2212 3 までに終了します。',
             boundLabel: '終了するラウンド',
             bound:      n => n > 0 ? `3n \u2212 3 = ${3 * n - 3}` : '\u2014',
         },
@@ -21,46 +21,42 @@ const LOCALE_JA = {
 
     tutorial: [
         { title: 'ツアーへようこそ',         text: 'メインUIエリアの簡単なガイドです。「次へ」を押して進む、「\u2190前へ」で戻る、または「\u2715」でいつでも閉じることができます。',                                                                                                                                                                                                     sel: null              },
-        { title: 'キャンバス',               text: 'メインエリアは2つに分かれています。左：ネットワーク（匿名エージェント）。右：History Tree（ネットワーク全体の履歴木）。各エージェントは Vista（部分履歴）を持ち、エージェントまたはノードを選択すると右パネルに Vista がハイライトされます。2つのエージェントは Vista が同型のとき区別不可能です。', sel: '#canvas-wrap'    },
+        { title: 'キャンバス',               text: 'メインエリアは2つに分かれています。左：ネットワーク（匿名エージェント）。右：History Tree（ネットワーク全体の履歴木）。各エージェントは Vista（部分履歴）を持ち、エージェントまたはノードを選択すると右パネルに Vista がハイライトされます。2つのエージェントは Vista が同型のとき区別不可能です。',                                                                            sel: '#canvas-wrap'    },
         { title: 'ダイナミックラウンド',      text: 'エッジはラウンドごとに変化します—それがネットワークを動的にしている理由です。ツールバーの\u25b2/\u25bcまたはキャンバス上のスクロールホイールを使ってラウンドを移動し、トポロジの変化を観察してください。',                                                                                                                   sel: '#btn-prev-round' },
         { title: 'カウントアルゴリズム',      text: '「安定化」または「終了型」を有効にしてカウントアルゴリズムを実行します。ツールバー下にアルゴリズムの説明と理論上のラウンド上界を示すバナーが表示されます。',                                                                                                                                                                 sel: '.algo-group'     },
-        { title: 'ステップの実行',            text: 'エージェントまたは History Tree のノードを選択し、\u25b6ステップを押す（またはSpace）とアルゴリズムが1ステップ進みます。選択したエージェントの Vista 上でノードの色が変化します。',                                                                                                                       sel: '#btn-step'       },
+        { title: 'ステップの実行',            text: 'エージェントまたは History Tree ノードを選択し、\u25b6ステップ（またはSpace）で1ステップ進みます。選択中エージェントの Vista 上でノードの色が変わります。',                                                                                                                       sel: '#btn-step'       },
         { title: 'ネットワークの読み込み',    text: '「読込」をクリックして networks/ フォルダからサンプルを開きます。DefaultNetwork2.txt が入門として最適です。BoldiVigna.txt は研究文献でよく知られた例です。',                                                                                                                                                               sel: '#btn-load'       },
-        { title: 'ネットワーク統計',          text: '左下の「ネットワーク統計」パネル：エージェント数 n、ラウンド T、区別可能クラス数、一意に特定されたエージェント数。',                                                                                                                                                        sel: '#net-stats'      },
+        { title: 'ネットワーク統計',          text: '左下のネットワーク統計：エージェント数 n、ラウンド数 T、区別可能クラス数、一意に特定されたエージェント数。',                                                                                                                                                        sel: '#net-stats'      },
         { title: '完了！',                   text: 'これで探索の準備ができました！「用語集」で重要な用語を確認し、ヘルプ（H）でキーボードショートカットを参照してください。さまざまなネットワークを読み込んで、2つのアルゴリズムの動作を比較してみましょう。',                                                                                                                    sel: null              },
     ],
 
     guidedStab: [
-        { title: 'ようこそ — カウントを始めよう！',           body: 'サンプルネットワークを読み込みました：5ラウンドにわたる6エージェントです。各エージェントのIDを知ることなく、安定化カウントアルゴリズムがどのように機能するかを理解することが目標です。',                                                                                                          action: null,                                               highlight: null            },
-        { title: 'エージェントは匿名',                        body: '左パネルの円がエージェントです。名前もIDもありません。唯一の例外はL（リーダー）で、特別な初期入力値0を持ちます。他のすべてのエージェントは入力値1から始まり、最初は完全に同一です。',                                                                                                                   action: null,                                               highlight: null            },
-        { title: 'ラウンド1：リング構造',                     body: 'ネットワークはリング状から始まります：L — 1 — 2 — 3 — 4 — 5 — L。エージェント1と5は対称（どちらもLの隣）、エージェント2・3・4も対称です。アルゴリズムはこの曖昧さを解消しなければなりません！',                                                                                                    action: null,                                               highlight: null            },
-        { title: 'ラウンド2へ進む',                           body: '\u2193キーかキャンバス上のスクロールホイールでラウンド2へ移動してください。リーダーLが接続するエージェントに注目—トポロジがすでに変化しています！',                                                                                                                                                   action: '\u2193キーかスクロールで進む',                       highlight: '#btn-next-round' },
-        { title: 'ネットワークは動的！',                       body: 'リンクが変化しました—異なる接続セットが有効になっています。敵対者は各ラウンドでネットワークを再接続できます。右パネルの History Tree が1レベル成長したことに注目してください。',                                                                                     action: null,                                               highlight: null            },
-        { title: 'ラウンド3へ進む',                           body: 'もう一度\u2193を押してラウンド3へ進んでください。リーダーLは以前到達できなかったエージェントに接続するようになります—これがネットワークを予測困難にする仕組みです。',                                                                                                                                  action: '\u2193キーかスクロールで進む',                       highlight: '#btn-next-round' },
-        { title: '5つのダイナミックラウンド',                  body: 'このネットワークは5ラウンドあります。↓を押してラウンド5まで進んでください。History Tree はラウンドごとに1レベル成長し、観測パターンが異なるエージェントは区別可能になります。',                                                              action: '↓キーかスクロールでラウンド5まで進む',               highlight: '#btn-next-round' },
-        { title: '安定化アルゴリズムを有効化',                 body: 'カウントを開始します！ツールバーの「安定化」ボタンをクリックしてください。アルゴリズムの説明と理論的な保証を示すバナーが表示されます。',                                                                                                                                                              action: '「安定化」ボタンをクリック',                         highlight: '.algo-group'   },
-        { title: 'エージェントを選択',                        body: '左パネルで任意のエージェント（円）を左クリックして選択してください。アルゴリズムは出発点となる Vista が必要です。',                                                                                                                                                                              action: '左パネルで任意のエージェントを左クリック',            highlight: null            },
-        { title: '1ステップ実行',                             body: 'ツールバーの\u25b6ステップ（またはSpace）を押してください。アルゴリズムは Vista 内の non-branching level を探し、赤エッジの多重度比からリーダーを起点に匿名性の推定値を割り当て始めます。',                                                                                                                                       action: '\u25b6ステップまたはSpaceを押す',                    highlight: '#btn-step'     },
-        { title: '色が変わった！',                            body: 'History Tree を見てください：L（リーダー）はすぐに緑になります（一意だから）。エージェント1・5と2・3・4は YELLOW（黄色）—ラウンド1では区別不可能なため推定しかできません。ステップを続けて曖昧さが解消される様子を観察してください。',                                             action: null,                                               highlight: null            },
-        { title: '完了まで繰り返す',                          body: '\u25b6ステップを何度か押してください。History Tree のルートノードに注目—緑になり「6」が表示されたとき、正しく n = 6 を決定したことを意味します！',                                                                                                                                              action: 'ルートノードが緑になるまで\u25b6ステップを押し続ける', highlight: '#btn-step'     },
-        { title: '\ud83c\udf89 n = 6 のカウント成功！',        body: 'ルートノードに6が表示されました—安定化アルゴリズムが正しく n = 6 を決定しました！上の「終了型」タブを試して、異なる保証を持つより強力なバリアントを確認してみましょう。',                                                                                                                           action: null,                                               highlight: null            },
+        { title: '安定化と終了型の違い',                          body: '学習では、2つのカウントアルゴリズムの性質の違いに焦点を当てます。まず安定化：途中では仮の（ときには誤った）推定を出し、やがて正しい n に落ち着きます。ただし「完了した」とは言いません。UIの説明はツアーを見てください。',                                                          action: null,                                               highlight: null            },
+        { title: 'このデモネットワーク',                          body: 'エージェント6体、動的ラウンド5つです。Lは唯一のリーダー（入力0）、他は最初は区別できません。情報が足りないあいだ、サイズの推定はあくまで推測にすぎません。',                                                                                              action: null,                                               highlight: null            },
+        { title: '安定化を有効にする',                            body: '「安定化」をクリックしてください。バナーに保証が表示されます：出力はラウンド 2n \u2212 2 までに安定します（ここでは最大10）。安定とは値が変わらなくなることであり、アルゴリズムが停止することではありません。',                                                              action: '「安定化」ボタンをクリック',                         highlight: '.algo-group'   },
+        { title: 'エージェントを選ぶ',                            body: '左パネルのエージェントを左クリックしてください。アルゴリズムはそのエージェントの Vista（部分履歴木）の上で動きます。',                                                                                                                                              action: '左パネルで任意のエージェントを左クリック',            highlight: null            },
+        { title: '1ステップ進める',                               body: '\u25b6ステップ（またはSpace）を押してください。アルゴリズムは non-branching level を探し、赤辺の比を使ってリーダーから匿名性の推定を広げます。履歴木の色の変化に注目してください。',                                                                                    action: '\u25b6ステップまたはSpaceを押す',                    highlight: '#btn-step'     },
+        { title: '仮の推定を見る',                                body: 'Lは緑になります（匿名性1）。対称なグループは黄から始まることが多く、これは証明済みではなく推測です。赤は誤った推定です。安定化は落ち着く前に誤ってよい—それがこのアルゴリズムの本質的なリスクです。右下の色凡例も見てください。',                      action: null,                                               highlight: '#node-legend'  },
+        { title: 'ここで止めてはいけない理由',                     body: 'Vista は「もう十分」に見えても、まだ欠けているエージェントやリンクがあることがあります。それらしい n が出た瞬間に停止すると、誤答を確定してしまう恐れがあります。だから安定化は証明書なしに止めず、値が落ち着くまで走り続けます。',                                      action: null,                                               highlight: null            },
+        { title: '落ち着くまで進める',                             body: '\u25b6ステップを押し続けてください。履歴木のルートが緑で 6 を示したとき、推定は n = 6 に安定しています。アルゴリズムは停止しませんが、（上界の範囲では）その答えはもう変わりません。',                                                                              action: 'ルートが緑で 6 になるまで\u25b6ステップを押し続ける', highlight: '#btn-step'     },
+        { title: '安定した — でも「完了」ではない',                body: '安定化は正しいカウントに到達しましたが、「止めてよい」ことの証明はありません。上の「終了型」タブでは、証明書が揃ってから停止する、より強い保証を見られます（その代わり上界は 3n \u2212 3）。',                                                                  action: null,                                               highlight: null            },
     ],
 
     guidedTerm: [
-        { title: '終了型 — より強い保証',                     body: '安定化（一時的に誤った値を出力することがある）とは異なり、終了型アルゴリズムは明示的に停止し、常に正しい答えのみを出力します。代償：終了は 2n \u2212 2 ではなく 3n \u2212 3 ラウンドまでかかります。同じ6エージェントネットワークが読み込まれています。',                                                action: null,                                               highlight: null            },
-        { title: '終了型アルゴリズムを有効化',                 body: 'ツールバーの「終了型」ボタンをクリックしてください。バナーが更新され、3n \u2212 3 の上界が表示されます。n = 6 の場合、最大15ラウンドです。',                                                                                                                                                          action: '「終了型」ボタンをクリック',                         highlight: '.algo-group'   },
-        { title: 'エージェントを選択',                        body: '左パネルで任意のエージェントを左クリックしてください。アルゴリズムは選択エージェントの Vista 上で検証可能な証拠を探します。',                                                                                                                                           action: '任意のエージェントを左クリック',                      highlight: null            },
-        { title: '最初のステップ — 色に注目',                  body: '\u25b6ステップを押してください。History Tree の色に注目：シアン＝初期レベルの推測（未確定）、オレンジ＝中間的な絞り込み。重要：ノードが赤になることはありません—誤った答えをコミットしません。',                                                                                              action: '\u25b6ステップまたはSpaceを押す',                    highlight: '#btn-step'     },
-        { title: '島（Isle）の構築',                          body: '終了型アルゴリズムは「島」を構築します—カウントを相互に確認し合うエージェントのグループです。オレンジノードは絞り込み中の島です。島が完全に検証されたときだけ、ルートがコミット（緑になる）します。ステップを続けてください。',                                                                     action: null,                                               highlight: null            },
-        { title: '終了まで繰り返す',                          body: '\u25b6ステップを繰り返し押してください。各ステップで新たに観測されたエージェントからの証拠が伝播します。アルゴリズムが確信を持ったとき、ルートが緑になって停止します—それ以降のステップで値が変わることはありません。',                                                                              action: 'ルートが n = 6 で緑になるまで\u25b6ステップを押す',   highlight: '#btn-step'     },
-        { title: '\ud83c\udf89 終了 — n = 6！',               body: '終了型アルゴリズムが証明可能な正しい答え n = 6 で停止しました。安定化とは異なり、誤った出力は一度も現れませんでした。「安定化」タブに戻って、ステップ数とラウンド上界を比較してみましょう。',                                                                                                     action: null,                                               highlight: null            },
+        { title: '終了型：証明してから停止する',                   body: '終了型は、カウントが正しいと証明できる証拠が揃ったときだけ n を出力して停止します。安定化と違い、誤った答えを確定しません。代償として、より遅い上界（2n \u2212 2 ではなく 3n \u2212 3）が必要です。同じ6エージェントのネットワークです。',                              action: null,                                               highlight: null            },
+        { title: '終了型を有効にする',                            body: '「終了型」をクリックしてください。バナーが 3n \u2212 3 の上界に更新されます（n = 6 なら最大15ラウンド）。',                                                                                                                                                          action: '「終了型」ボタンをクリック',                         highlight: '.algo-group'   },
+        { title: 'エージェントを選ぶ',                            body: '任意のエージェントを左クリックしてください。アルゴリズムは、それらしい数字だけでなく、検証可能な構造を Vista の中に探します。',                                                                                                                                    action: '任意のエージェントを左クリック',                      highlight: null            },
+        { title: '未確定の色に注目',                              body: '\u25b6ステップを押してください。シアンは初期の未確定な推測、オレンジは途中の絞り込みです。ノードが赤になることはありません—誤答を確定しないためです。右下の凡例と色を照合してください。',                                                                              action: '\u25b6ステップまたはSpaceを押す',                    highlight: '#btn-step, #node-legend' },
+        { title: '推測ではなく証明書',                            body: '終了型は証拠を段階的に積み上げます。guesser が推定の種になり、heavy node が整合性を確かめ、検証済みの isle や cut が証明書になります。そのあと初めてルートが緑になり、停止できます。',                                                                              action: null,                                               highlight: '#label-history' },
+        { title: '停止するまで進める',                             body: '\u25b6ステップを押し続けてください。ルートが緑で 6 になったとき、アルゴリズムは終了しています。答えは証明済みで、これ以上変わりません。',                                                                                                                            action: 'ルートが n = 6 で緑になるまで\u25b6ステップを押す',   highlight: '#btn-step'     },
+        { title: '2つの保証を比べる',                             body: '安定化：途中は誤り得る／2n \u2212 2 までに落ち着く／停止信号なし。終了型：誤答を確定しない／証明書付きで停止／上界は 3n \u2212 3。同じカウント問題でも、約束が違います。タブを切り替えて見比べてください。',                                                          action: null,                                               highlight: null            },
     ],
 
     commentary: {
         uniqueIdentified: (du, unique, n) => `+${du} エージェントを一意に特定  (${unique} / ${n})`,
         classesChanged:   (from, to)       => `区別可能クラス: ${from} \u2192 ${to}`,
+        nodesGuessed:     (dg, total)      => `${dg} ノードに推定値を割り当て  (${total} 合計)`,
         rootGuessChanged: (was, now, ok)   => `ルート推定値: ${was} \u2192 ${now}${ok ? '  \u2713 正解！' : ''}`,
-        nodesGuessed:     (dg, total)      => `${dg} ノードに推定値を割り当て  (計 ${total} ノード)`,
         noChange:         '変化なし — 別のエージェントを選択して試してください。',
     },
 
@@ -111,21 +107,22 @@ const LOCALE_JA = {
         statsLeaders: 'リーダー数',
         statsRounds:  'ラウンド数',
         statsLinks:   'リンク数（現ラウンド）',
-        statsClasses: '区別可能クラス数',
+        statsClasses: '匿名性クラス数',
         statsUnique:  '一意に特定済み',
         // アルゴリズムバナー
-        bannerHint:    'エージェントまたは History Tree ノードを選択し、<kbd>Space</kbd>（または<strong>\u25b6 ステップ</strong>）を押してステップを実行してください。',
+        bannerHint:    'エージェントまたは履歴木ノードを選択し、<kbd>Space</kbd>（または<strong>\u25b6 ステップ</strong>）を押してステップを実行してください。',
         bannerUniq:    '一意に特定済み',
         bannerAgents:  'エージェント',
-        bannerClasses: '区別可能クラス数',
+        bannerClasses: '匿名性クラス数',
         // ツアーパネル
         tutPrev: '\u2190 前へ',
         tutNext: '次へ \u2192',
         tutDone: '\u2713 完了',
         // 学習パネル
         guidedBadge: '\ud83c\udf93 学習',
-        guidedSkip:  'スキップ \u2192\u2192',
+        guidedSkip:  'この操作を飛ばす \u2192',
         guidedNext:  '次へ \u2192',
+        guidedPrev:  '\u2190 前へ',
         guidedDone:  '\u2713 完了',
         // その他メッセージ
         wasmNotReady: 'WASMがまだ準備できていません — しばらく待ってから再試行してください。',
@@ -150,8 +147,8 @@ const LOCALE_JA = {
 <h3>ナビゲーション</h3>
 <table>
 <tr><td>\u2191 / \u2193</td><td>前/次のラウンド</td></tr>
-<tr><td>\u2190 / \u2192</td><td>現在の Vista 内で前/次の区別可能クラス</td></tr>
-<tr><td>ESC</td><td>エージェントの選択解除と Vista 選択のクリア</td></tr>
+<tr><td>\u2190 / \u2192</td><td>現在のビューで前/次の匿名性クラス</td></tr>
+<tr><td>ESC</td><td>エージェントの選択解除とビュー選択のクリア</td></tr>
 </table>
 <h3>ネットワーク編集</h3>
 <table>
@@ -180,16 +177,16 @@ const LOCALE_JA = {
 <table>
 <tr><td>O</td><td>エージェントの出次数認識を切替</td></tr>
 <tr><td>A</td><td>エッジの矢印表示を切替</td></tr>
-<tr><td>D</td><td>赤エッジ描画モードを切替：全表示 \u2192 選択 Vista のみ \u2192 非表示</td></tr>
+<tr><td>D</td><td>赤エッジ描画モードを切替：全表示 \u2192 選択ビューのみ \u2192 非表示</td></tr>
 <tr><td>B</td><td>丸/四角ノードを切替</td></tr>
 <tr><td>C</td><td>現在レベルのグレーハイライトバーを切替</td></tr>
 <tr><td>H</td><td>この操作ガイドを表示</td></tr>
 </table>
-<div id="help-ref">参考文献: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a>（Viglietta, arXiv 2024）</div>`,
+<div id="help-ref">理論的背景: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a></div>`,
         // 用語集モーダル
         glossaryTitle: 'Anonymous Dynamic Networks — 用語集',
         glossaryClose: '\u2715 閉じる',
-        glossaryContent: `<div class="gl-entry"><div class="gl-term">エージェント（Agent）</div><div class="gl-def">ネットワーク内の計算主体。エージェントは固有識別子を持ちません—<em>匿名</em>です。各エージェントは整数の<em>入力</em>値から始まります（0 = リーダー）。</div></div>
+                glossaryContent: `<div class="gl-entry"><div class="gl-term">エージェント（Agent）</div><div class="gl-def">ネットワーク内の計算主体。エージェントは固有識別子を持ちません—<em>匿名</em>です。各エージェントは整数の<em>入力</em>値から始まります（0 = リーダー）。</div></div>
 <div class="gl-entry"><div class="gl-term">リーダー（Leader）</div><div class="gl-def">入力値0を持つ特別なエージェントで、シミュレータでは<strong>L</strong>と表示されます。カウントアルゴリズムは、エージェントの総数<em>n</em>を決定するための基準点としてリーダーを使用します。</div></div>
 <div class="gl-entry"><div class="gl-term">動的ネットワーク（Dynamic Network）</div><div class="gl-def">通信リンクがラウンドごとに変化するネットワーク。静的ネットワークとは異なり、エッジは永続的ではありません—敵対者によって制御される可能性があります。エージェントが固定されたトポロジに依存できないことが主な課題です。</div></div>
 <div class="gl-entry"><div class="gl-term">ラウンド（Round）</div><div class="gl-def">通信の1タイムステップ。各ラウンドでは一連の有向リンクが有効で、エージェントはそれらのリンクに沿ってのみメッセージを交換します。シミュレータでは<strong>\u2191 / \u2193</strong>またはスクロールホイールでラウンドを閲覧できます。</div></div>
@@ -198,10 +195,11 @@ const LOCALE_JA = {
 <div class="gl-entry"><div class="gl-term">ビスタ（Vista）</div><div class="gl-def">各エージェントが持つ History Tree の<strong>部分履歴</strong>—そのエージェントがこれまでに集めた観測情報です。ラウンドごとに拡張されます。シミュレータではエージェントまたは History Tree ノードを選択すると、右パネル上でその Vista がハイライト表示されます（明るいノードとエッジ）。</div></div>
 <div class="gl-entry"><div class="gl-term">区別可能クラス（Distinguishable Class）</div><div class="gl-def">ある時点で区別不可能なエージェントのグループ。History Tree の各ノードが1クラスを表し、ノードの<strong>匿名性</strong>はクラスのサイズ（そのクラスに属するエージェント数）です。匿名性1は一意に識別可能であることを意味します。</div></div>
 <div class="gl-entry"><div class="gl-term">カウント問題（Counting Problem）</div><div class="gl-def">エージェントの総数<em>n</em>を決定するタスク。エージェントは匿名であるため、単純に自分たちを数えることはできません—複数ラウンドにわたる受信メッセージのパターンから<em>n</em>を推論する必要があります。</div></div>
-<div class="gl-entry"><div class="gl-term">安定化アルゴリズム（Stabilizing Algorithm）</div><div class="gl-def">最終的に正しい答えを出力し、<em>それ以降は変更しない</em>アルゴリズムですが、安定する前に誤った値を出力することがあります。シミュレータの安定化アルゴリズムはラウンド2n \u2212 2までに安定することが保証されています。<strong>安定化</strong>ボタンで選択できます。</div></div>
-<div class="gl-entry"><div class="gl-term">終了型アルゴリズム（Terminating Algorithm）</div><div class="gl-def">正しい答えを出力して<em>停止</em>し、完了を明示的に通知するアルゴリズム。これは安定化よりも強い保証です：停止したとき、答えは証明可能に正しいです。<strong>終了型</strong>ボタンで選択できます。</div></div>
+<div class="gl-entry"><div class="gl-term">安定化アルゴリズム（Stabilizing Algorithm）</div><div class="gl-def">やがて正しい答えを出し、<em>それ以降は変えません</em>。ただし安定する前は誤った値を出してよいアルゴリズムです。停止信号はありません。ラウンド 2n \u2212 2 までに安定することが保証されます。<strong>安定化</strong>で選択します。</div></div>
+<div class="gl-entry"><div class="gl-term">終了型アルゴリズム（Terminating Algorithm）</div><div class="gl-def">正しい答えを出してから<em>停止</em>し、正しさの証明書付きで完了を示します。安定化より強い保証で、止まった時点の答えは証明済みです。上界は 3n \u2212 3。<strong>終了型</strong>で選択します。</div></div>
 <div class="gl-entry"><div class="gl-term">出次数認識（Outdegree Awareness）</div><div class="gl-def">オプション機能（<strong>O</strong>で切替）で、各エージェントが前のラウンドで<em>送信した</em>メッセージ数も把握します。この追加情報により、アルゴリズムがより速くまたはより正確な推定ができる場合があります。</div></div>
 <div class="gl-entry"><div class="gl-term">Non-Branching Level（分岐なしレベル）</div><div class="gl-def">History Tree の各ノードがちょうど1つの子だけを持つレベル（分岐がない）。2つの non-branching ノードの子同士が赤エッジで互いを結ぶとき、多重度の比は匿名性の比と一致します。安定化アルゴリズムは Vista 内の最初の non-branching level から、リーダーを起点に匿名性推定を伝播します。</div></div>
-<div id="glossary-ref">参考文献: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a>（Viglietta, arXiv 2024）</div>`,
+<div class="gl-entry"><div class="gl-term">Isle / Cut（終了型）</div><div class="gl-def">Vista 内で検証された構造で、正しさの証明書として使います。終了型は guesser と heavy node で推測を積み、isle や cut がカウントを確認してから初めて確定します。</div></div>
+<div id="glossary-ref">参考文献: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a> (Viglietta, arXiv 2024)</div>`,
     },
 };
