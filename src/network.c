@@ -519,9 +519,18 @@ EMSCRIPTEN_KEEPALIVE int GetCurrentRoundLinks(void){
     return ((Vector*)network->rounds->items[currentRound])->tot;
 }
 
+/* Aux level aligned with the history-tree row highlighted for currentRound (see render.c). */
+static int AuxLevelForCurrentRound(void){
+    if(!aux || aux->tot==0 || currentRound<0)return -1;
+    int level=currentRound+2;
+    if(level<0 || level>=aux->tot)return -1;
+    return level;
+}
+
 EMSCRIPTEN_KEEPALIVE int GetNumAnonymityClasses(void){
-    if(!aux || aux->tot==0)return 0;
-    return GetLevel(aux->tot-1)->tot;
+    int level=AuxLevelForCurrentRound();
+    if(level<0)return 0;
+    return GetLevel(level)->tot;
 }
 
 EMSCRIPTEN_KEEPALIVE void ResetRebuildPerfMetrics(void){ lastRebuildMs=0.0; sumRebuildMs=0.0; rebuildSamples=0; }
@@ -530,11 +539,12 @@ EMSCRIPTEN_KEEPALIVE double GetSumRebuildMs(void)  { return sumRebuildMs;  }
 EMSCRIPTEN_KEEPALIVE int    GetRebuildSamples(void){ return rebuildSamples; }
 
 EMSCRIPTEN_KEEPALIVE int GetNumUniqueAgents(void){
-    if(!aux || aux->tot==0)return 0;
-    Vector *lastLevel=GetLevel(aux->tot-1);
+    int level=AuxLevelForCurrentRound();
+    if(level<0)return 0;
+    Vector *v=GetLevel(level);
     int count=0;
-    for(int j=0;j<lastLevel->tot;j++){
-        AuxData *data=lastLevel->items[j];
+    for(int j=0;j<v->tot;j++){
+        AuxData *data=v->items[j];
         if(data->anonymity==1)count++;
     }
     return count;
@@ -615,5 +625,36 @@ EMSCRIPTEN_KEEPALIVE int GetRootGuess(void){
 
 EMSCRIPTEN_KEEPALIVE int GetSelectedEntity(void){
     return selectedEntity;
+}
+
+EMSCRIPTEN_KEEPALIVE void TestGotoRound(int r){
+    if(!network || r<-1 || r>=network->rounds->tot)return;
+    currentRound=r;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxLevelCount(void){
+    return aux?aux->tot:0;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxLevelWidth(int level){
+    if(!aux || level<0 || level>=aux->tot)return 0;
+    return GetLevel(level)->tot;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxLevelUniqueCount(int level){
+    if(!aux || level<0 || level>=aux->tot)return 0;
+    Vector *v=GetLevel(level);
+    int count=0;
+    for(int j=0;j<v->tot;j++)
+        if(((AuxData*)v->items[j])->anonymity==1)count++;
+    return count;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxLevelAnonymitySum(int level){
+    if(!aux || level<0 || level>=aux->tot)return 0;
+    Vector *v=GetLevel(level);
+    int sum=0;
+    for(int j=0;j<v->tot;j++)sum+=((AuxData*)v->items[j])->anonymity;
+    return sum;
 }
 #endif

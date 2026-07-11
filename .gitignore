@@ -1,1 +1,43 @@
 /.env
+
+# Dependencies (installed locally for Puppeteer tests, etc.)
+/node_modules/
+package.json
+package-lock.json
+
+# Local build / agent logs
+*.log
+build_1gb.bat
+build_agent.log
+build_main_docker.log
+
+# Browser test & benchmark automation
+/scripts/**
+!/scripts/serve.js
+!/scripts/test_round_stats.js
+
+# Generated reports & PDF assets from local benchmarking
+/docs/
+
+# Presentation generator & generated slides (local only)
+/presentation/
+Presentation*.pptx
+.~lock.Presentation*.pptx#
+
+# Legacy Phase 1 comparison build (removed)
+/website_no_phase1/
+
+# Course lecture slides (local reference material)
+/networkKnowledge/
+
+# Chat / slide inspection scratch files
+analyze_slide*.py
+extract_vista.py
+find_red_in_slides.py
+lesson04_extract.txt
+networkKnowledge_hits.json
+red_slides.txt
+slide*.json
+slide*_out.txt
+vista_slides.json
+vista_out.txt
