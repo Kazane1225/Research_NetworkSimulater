@@ -533,38 +533,38 @@ window.addEventListener('keydown', e => {
 //   highlight – CSS selector of the toolbar element to pulse-highlight
 let guidedStepFired = false;  // set to true when user presses Step/Space
 
-// Trigger functions (locale-independent; reference ui.js state variables).
-// Indices correspond to guidedStab / guidedTerm arrays in i18n.js.
+function rootGuessMatchesN() {
+    return typeof Module._GetRootGuess === 'function' &&
+           typeof Module._GetNumAgents === 'function' &&
+           Module._GetNumAgents() > 0 &&
+           Module._GetRootGuess() === Module._GetNumAgents();
+}
+
+function agentSelected() {
+    return typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0;
+}
+
+// Trigger functions (locale-independent). Indices must match guidedStab / guidedTerm.
 const STAB_TRIGGERS = [
-    null,   // Welcome
-    null,   // Agents are Anonymous
-    null,   // Round 1: A Ring
-    () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 1,
-    null,   // The Network is Dynamic!
-    () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 2,
-    null,   // Five Dynamic Rounds
+    null,                 // Stabilizing vs Terminating
+    null,                 // This Demo Network
     () => algoState === 1,
-    () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
+    () => agentSelected(),
     () => guidedStepFired,
-    null,   // Colors Changed!
-    () => typeof Module._GetRootGuess === 'function' &&
-          typeof Module._GetNumAgents === 'function' &&
-          Module._GetNumAgents() > 0 &&
-          Module._GetRootGuess() === Module._GetNumAgents(),
-    null,   // Done
+    null,                 // Provisional Guesses
+    null,                 // Why Not Halt Here?
+    () => rootGuessMatchesN(),
+    null,                 // Stabilized — No “Done” Signal
 ];
 
 const TERM_TRIGGERS = [
-    null,   // Terminating — Stronger Guarantee
+    null,                 // Terminating: Halt With a Proof
     () => algoState === 2,
-    () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
+    () => agentSelected(),
     () => guidedStepFired,
-    null,   // Building Isles
-    () => typeof Module._GetRootGuess === 'function' &&
-          typeof Module._GetNumAgents === 'function' &&
-          Module._GetNumAgents() > 0 &&
-          Module._GetRootGuess() === Module._GetNumAgents(),
-    null,   // Done
+    null,                 // Certificates, Not Just Guesses
+    () => rootGuessMatchesN(),
+    null,                 // Compare the Two Guarantees
 ];
 
 function buildGuidedSteps(localeSteps, triggers) {
@@ -579,139 +579,13 @@ function getScenarios() {
     ];
 }
 
-// Legacy step arrays kept for reference — text is now served from i18n.js.
-// DO NOT USE directly; access steps via getScenarios() instead.
-const GUIDED_STEPS_STAB = [
-    {
-        title: 'Welcome — Let\'s Count!',
-        body:  'We\'ve loaded a small example network: 6 agents across 5 rounds. Your goal is to understand how the Stabilizing counting algorithm works — all without knowing any agent\'s identity.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Agents are Anonymous',
-        body:  'The circles in the left panel are agents. They have no names or IDs. The only exception is the L (leader), which has a special starting input of 0. All other agents start with input 1 and are completely identical at first.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Round 1: A Ring',
-        body:  'The network starts as a ring: L — 1 — 2 — 3 — 4 — 5 — L. Agents 1 & 5 are symmetric (both next to L), and agents 2, 3, 4 are also symmetric. The algorithm will have to resolve this ambiguity!',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Advance to Round 2',
-        body:  'Press ↓ or scroll the mouse wheel on the canvas to go to Round 2. Notice which agents the leader L is now connected to — the topology is already different!',
-        action: 'Press ↓ or scroll to advance',
-        trigger: () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 1,
-        highlight: '#btn-next-round',
-    },
-    {
-        title: 'The Network is Dynamic!',
-        body:  'The links changed — a different set of connections is active. This is what makes the network dynamic: an adversary can rewire it each round. Notice the History Tree (right panel) grew one level.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Advance to Round 3',
-        body:  'Press ↓ once more to reach Round 3. The leader L now connects to agents it did not reach before — this is how the network stays unpredictable.',
-        action: 'Press ↓ or scroll to advance',
-        trigger: () => typeof Module._GetCurrentRound === 'function' && Module._GetCurrentRound() >= 2,
-        highlight: '#btn-next-round',
-    },
-    {
-        title: 'Five Dynamic Rounds',
-        body:  'This network has 5 rounds — feel free to browse all of them with ↓. The History Tree grows one level per round. Agents with different observation sequences have different tree shapes, making them distinguishable.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Enable the Stabilizing Algorithm',
-        body:  'Time to count! Click the Stabilizing button in the toolbar. A description banner will appear explaining the algorithm and its theoretical guarantee.',
-        action: 'Click the Stabilizing button',
-        trigger: () => algoState === 1,
-        highlight: '.algo-group',
-    },
-    {
-        title: 'Select an Agent',
-        body:  'Left-click any agent (circle) in the left panel to select it. The algorithm needs a starting view to work from.',
-        action: 'Left-click any agent in the left panel',
-        trigger: () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
-        highlight: null,
-    },
-    {
-        title: 'Execute One Step',
-        body:  'Press ▶ Step in the toolbar (or Space). The algorithm will look for exposed pairs — agents that mutually observed each other — and start assigning anonymity estimates.',
-        action: 'Press ▶ Step or Space',
-        trigger: () => guidedStepFired,
-        highlight: '#btn-step',
-    },
-    {
-        title: 'Colors Changed!',
-        body:  'Look at the History Tree: L turns green immediately (it is unique). Agents 1 & 5 and agents 2, 3 & 4 start YELLOW — the algorithm recognises they are indistinguishable in round 1, so it can only guess. Keep stepping to watch it resolve the ambiguity.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Keep Stepping Until Done',
-        body:  'Press ▶ Step several more times. Watch the root node of the History Tree — when it turns green and shows "6", the algorithm has stabilized and correctly determined n = 6!',
-        action: 'Keep pressing ▶ Step until the root node turns green',
-        trigger: () => typeof Module._GetRootGuess === 'function' &&
-                       typeof Module._GetNumAgents === 'function' &&
-                       Module._GetNumAgents() > 0 &&
-                       Module._GetRootGuess() === Module._GetNumAgents(),
-        highlight: '#btn-step',
-    },
-    {
-        title: '🎉 n = 6 Counted Successfully!',
-        body:  'The root node shows 6 — the stabilizing algorithm has correctly determined n = 6! Try the Terminating tab above to see a stronger variant with a different guarantee.',
-        action: null, trigger: null, highlight: null,
-    },
-];
-
-const GUIDED_STEPS_TERM = [
-    {
-        title: 'Terminating — Stronger Guarantee',
-        body:  'Unlike Stabilizing (which may briefly show wrong values), the Terminating algorithm halts explicitly and only ever outputs the correct answer. Cost: it terminates by round 3n − 3 instead of 2n − 2. Same 6-agent network is loaded.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Enable Terminating Algorithm',
-        body:  'Click the Terminating button in the toolbar. The banner will update to show the 3n − 3 bound. For n = 6 that is at most 15 rounds.',
-        action: 'Click the Terminating button',
-        trigger: () => algoState === 2,
-        highlight: '.algo-group',
-    },
-    {
-        title: 'Select an Agent',
-        body:  'Left-click any agent in the left panel. The algorithm analyses the selected agent\'s history tree to look for verifiable evidence of the network size.',
-        action: 'Left-click any agent',
-        trigger: () => typeof Module._GetSelectedEntity === 'function' && Module._GetSelectedEntity() >= 0,
-        highlight: null,
-    },
-    {
-        title: 'First Step — Watch the Colours',
-        body:  'Press ▶ Step. Look at the History Tree colours: cyan = initial-level guess (uncommitted), orange = intermediate refinement. Key point: no node ever turns red — the algorithm never commits to a wrong answer.',
-        action: 'Press ▶ Step or Space',
-        trigger: () => guidedStepFired,
-        highlight: '#btn-step',
-    },
-    {
-        title: 'Building Isles',
-        body:  'The Terminating algorithm builds "isles" — groups of agents whose combined evidence mutually confirms the count. Orange nodes are isles being refined. Only when an isle is fully verified does the root commit (turn green). Keep stepping.',
-        action: null, trigger: null, highlight: null,
-    },
-    {
-        title: 'Step to Termination',
-        body:  'Press ▶ Step repeatedly. Each step propagates evidence from newly seen agents. When the algorithm is certain, the root turns green and halts — no further step will ever change it.',
-        action: 'Press ▶ Step until the root turns green with n = 6',
-        trigger: () => typeof Module._GetRootGuess === 'function' &&
-                       typeof Module._GetNumAgents === 'function' &&
-                       Module._GetNumAgents() > 0 &&
-                       Module._GetRootGuess() === Module._GetNumAgents(),
-        highlight: '#btn-step',
-    },
-    {
-        title: '🎉 Terminated — n = 6!',
-        body:  'The Terminating algorithm has halted with the provably correct answer n = 6. Unlike Stabilizing, no incorrect output ever appeared. Switch back to the Stabilizing tab and compare the number of steps and round bounds.',
-        action: null, trigger: null, highlight: null,
-    },
-];
+// Reload the tutorial network and clear algorithm state for a Learn scenario.
+function prepareLearnNetwork() {
+    if (typeof Module._TutorialLoadNetwork !== 'function') return false;
+    Module._TutorialLoadNetwork();
+    if (algoState !== 0) cycleAlgoTo(0);
+    return true;
+}
 
 let guidedStep     = 0;
 let guidedScenario = 0;
@@ -796,14 +670,11 @@ function startGuidedPoll() {
 }
 
 function openGuided() {
-    if (typeof Module._TutorialLoadNetwork !== 'function') {
+    if (!prepareLearnNetwork()) {
         alert(getLocale().ui.wasmNotReady);
         return;
     }
     if (tutOpen) closeTutorial();
-
-    Module._TutorialLoadNetwork();
-    if (algoState !== 0) cycleAlgoTo(0);
 
     guidedStep      = 0;
     guidedOpen      = true;
@@ -841,10 +712,7 @@ document.querySelectorAll('.guided-tab').forEach((tab, i) => {
         guidedScenario  = i;
         guidedStep      = 0;
         guidedStepFired = false;
-        if (guidedOpen) {
-            if (algoState !== 0) cycleAlgoTo(0);
-            if (typeof Module._TutorialLoadNetwork === 'function') Module._TutorialLoadNetwork();
-        }
+        if (guidedOpen) prepareLearnNetwork();
         document.querySelectorAll('.guided-tab').forEach((t, j) =>
             t.classList.toggle('active', j === i)
         );
