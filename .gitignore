@@ -14,7 +14,6 @@ build_main_docker.log
 # Browser test & benchmark automation (keep serve.js for serve.bat)
 /scripts/**
 !/scripts/serve.js
-!/scripts/test_round_stats.js
 
 # Generated reports & PDF assets from local benchmarking
 /docs/
@@ -23,21 +22,31 @@ build_main_docker.log
 /presentation/
 Presentation*.pptx
 .~lock.Presentation*.pptx#
+presentation_titles.json
+presentation_titles.txt
 
 # Legacy Phase 1 comparison build (removed)
 /website_no_phase1/
 
-# Course lecture slides (local reference material)
+# Course lecture slides / local notes (reference material)
 /networkKnowledge/
+/knowledge/
+
+# Local WASM swap / backup copies from comparison runs
+/website/bak.wasm
+/website/index_prev.wasm
+/website/*.bak.wasm
 
 # Chat / slide inspection scratch files
 analyze_slide*.py
-extract_vista.py
+extract_*.py
 find_red_in_slides.py
 lesson04_extract.txt
 networkKnowledge_hits.json
 red_slides.txt
 slide*.json
+slide*.txt
 slide*_out.txt
 vista_slides.json
 vista_out.txt
+algo_step_compare.json

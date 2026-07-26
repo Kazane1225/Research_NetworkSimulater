@@ -116,7 +116,11 @@ static void RenderNetwork(WindowData *win,float rx,float ry){
     PrepareRenderLine();
     for(int i=network->entities->tot-1;i>=0;i--){
         Entity *e=GetEntity(i);
-        if(i==selectedEntity || CorrespondsToSelectedNode(e))SetColor(88,166,255);
+        if(i==selectedEntity || CorrespondsToSelectedNode(e)){
+            if(uiTheme)SetColor(9,105,218);
+            else SetColor(88,166,255);
+        }
+        else if(uiTheme)SetColor(255,255,255);
         else SetColor(230,237,243);
         DrawEllipse(win,Patch(e->x,true),e->y,rx,ry,true,2,DISCRETIZE_RENDERING);
         if(currentRound<-1)continue;
@@ -134,7 +138,8 @@ static void RenderNetwork(WindowData *win,float rx,float ry){
 static void RenderHistoryTree(WindowData *win,float rx,float ry){
     SetWidth(3.0f);
     if(renderBar){ // render gray bar on current level
-        SetColor(22,27,34);
+        if(uiTheme)SetColor(234,238,242);
+        else SetColor(22,27,34);
         AuxData *data=GetAuxData(currentRound+2,0);
         DrawRectangle(win,Patch(0,false),data->y,-Patch(0,true),ry,true,false,false);
     }
@@ -142,7 +147,11 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
         for(int j=0;j<GetLevel(i)->tot;j++){
             AuxData *data=GetAuxData(i,j);
             AuxData *parent=GetAuxData(i-1,data->parent);
-            if(!selectedNode || data->visible)SetColor(139,148,158);
+            if(!selectedNode || data->visible){
+                if(uiTheme)SetColor(101,109,118);
+                else SetColor(139,148,158);
+            }
+            else if(uiTheme)SetColor(175,184,193);
             else SetColor(72,79,88);
             SetWidth(!selectedNode || data->visible?8.0f:3.0f);
             DrawLine(win,Patch(data->x,false),data->y,Patch(parent->x,false),parent->y,DISCRETIZE_RENDERING);
@@ -157,33 +166,6 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
                 for(int k=0;k<data->observations->tot;k++){
                     AuxData *obs=GetAuxData(i-1,data->observations->items[k]);
                     DrawLine(win,Patch(data->x,false),data->y,Patch(obs->x,false),obs->y,DISCRETIZE_RENDERING);
-                }
-            }
-        SetWidth(2.0f);
-        PrepareRenderText();
-        SetFontProperties(0.35f,0.0f,FONT_EDGE*5);
-        SetFontSize(ry*1.5f*BLACK_EDGE_LABEL_SIZE);
-        PrepareRenderLine();
-        for(int i=aux->tot-1;i>1;i--) // render outdegrees
-            for(int j=0;j<GetLevel(i)->tot;j++){
-                AuxData *data=GetAuxData(i,j);
-                if(data->outdegree<0)continue;
-                if(renderLinks && !data->visible)continue;
-                AuxData *parent=GetAuxData(i-1,data->parent);
-                DrawLabel(win,Patch(data->x,false),data->y,Patch(parent->x,false),parent->y,data->outdegree,BLACK_EDGE_LABEL_POSITION,rx*BLACK_EDGE_LABEL_SIZE,ry*BLACK_EDGE_LABEL_SIZE,!selectedNode || data->visible,false,DISCRETIZE_RENDERING);
-            }
-        PrepareRenderText();
-        SetFontSize(ry*1.5f*RED_EDGE_LABEL_SIZE);
-        PrepareRenderLine();
-        for(int i=aux->tot-1;i>=0;i--) // render multiplicities
-            for(int j=0;j<GetLevel(i)->tot;j++){
-                AuxData *data=GetAuxData(i,j);
-                if(renderLinks && !data->visible)continue;
-                for(int k=0;k<data->observations->tot;k++){
-                    Observation *obs1=data->h->observations->items[k];
-                    if(obs1->multiplicity<=1)continue;
-                    AuxData *obs2=GetAuxData(i-1,data->observations->items[k]);
-                    DrawLabel(win,Patch(data->x,false),data->y,Patch(obs2->x,false),obs2->y,obs1->multiplicity,RED_EDGE_LABEL_POSITION,rx*RED_EDGE_LABEL_SIZE,ry*RED_EDGE_LABEL_SIZE,!selectedNode || data->visible,true,DISCRETIZE_RENDERING);
                 }
             }
     }
@@ -210,6 +192,7 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
                 }
                 else SetColor(227,179,65);
             }
+            else if(uiTheme)SetColor(208,215,222);
             else SetColor(48,54,61);
             SetWidth(3.0f);
             int border=!selectedNode || data->visible?2:1;
@@ -248,13 +231,49 @@ static void RenderHistoryTree(WindowData *win,float rx,float ry){
                 PrepareRenderLine();
             }
         }
+    // Edge labels after nodes so multiplicity / outdegree badges stay readable.
+    if(renderLinks<2){
+        SetWidth(2.0f);
+        PrepareRenderText();
+        SetFontProperties(0.35f,0.0f,FONT_EDGE*5);
+        SetFontSize(ry*1.5f*BLACK_EDGE_LABEL_SIZE);
+        PrepareRenderLine();
+        for(int i=aux->tot-1;i>1;i--) // render outdegrees
+            for(int j=0;j<GetLevel(i)->tot;j++){
+                AuxData *data=GetAuxData(i,j);
+                if(data->outdegree<0)continue;
+                if(renderLinks && !data->visible)continue;
+                AuxData *parent=GetAuxData(i-1,data->parent);
+                DrawLabel(win,Patch(data->x,false),data->y,Patch(parent->x,false),parent->y,data->outdegree,BLACK_EDGE_LABEL_POSITION,rx*BLACK_EDGE_LABEL_SIZE,ry*BLACK_EDGE_LABEL_SIZE,!selectedNode || data->visible,false,DISCRETIZE_RENDERING);
+            }
+        PrepareRenderText();
+        SetFontSize(ry*1.5f*RED_EDGE_LABEL_SIZE);
+        PrepareRenderLine();
+        for(int i=aux->tot-1;i>=0;i--) // render multiplicities
+            for(int j=0;j<GetLevel(i)->tot;j++){
+                AuxData *data=GetAuxData(i,j);
+                if(renderLinks && !data->visible)continue;
+                for(int k=0;k<data->observations->tot;k++){
+                    Observation *obs1=data->h->observations->items[k];
+                    if(obs1->multiplicity<=1)continue;
+                    AuxData *obs2=GetAuxData(i-1,data->observations->items[k]);
+                    DrawLabel(win,Patch(data->x,false),data->y,Patch(obs2->x,false),obs2->y,obs1->multiplicity,RED_EDGE_LABEL_POSITION,rx*RED_EDGE_LABEL_SIZE,ry*RED_EDGE_LABEL_SIZE,!selectedNode || data->visible,true,DISCRETIZE_RENDERING);
+                }
+            }
+    }
 }
 
 static void RenderHelp(void){
     SetFontProperties(0.35f,0.0f,FONT_EDGE*5);
     SetFontSize(FONT_SIZE*1.0f);
-    SetFontOutlineColor(0.051f,0.067f,0.090f);
-    SetFontColor(0.784f,0.820f,0.851f,1.0f);
+    if(uiTheme){
+        SetFontOutlineColor(0.957f,0.965f,0.973f);
+        SetFontColor(0.122f,0.137f,0.157f,1.0f);
+    }
+    else{
+        SetFontOutlineColor(0.051f,0.067f,0.090f);
+        SetFontColor(0.784f,0.820f,0.851f,1.0f);
+    }
 
     int lines=sizeof(helpMessage)/sizeof(helpMessage[0]);
     for(int i=0;i<lines;i++)PrintString(-win1->aspect+0.05f,-1.0f+0.05f*(i+1)+((i==0||i==5||i==14||i==35)?0.025f:0.0f),false,"%s",helpMessage[i]);
@@ -288,7 +307,8 @@ void RenderWindow1(WindowData *win){
         return;
     }
     PrepareRenderLine();
-    SetColor(48,54,61);
+    if(uiTheme)SetColor(208,215,222);
+    else SetColor(48,54,61);
     SetWidth(1.0f);
     if(SeparatorX()>1.0f){
         ClipRectPx(0,0,SeparatorX(),h);
@@ -308,15 +328,24 @@ void RenderWindow1(WindowData *win){
         RenderHistoryTree(win,rx,ry);
         ClipOff();
     }
-    if(resizeHover){ SetColor(139,148,158); SetWidth(5.0f); }
-    else { SetColor(48,54,61); SetWidth(1.0f); }
+    if(resizeHover){
+        if(uiTheme)SetColor(101,109,118);
+        else SetColor(139,148,158);
+        SetWidth(5.0f);
+    }
+    else{
+        if(uiTheme)SetColor(208,215,222);
+        else SetColor(48,54,61);
+        SetWidth(1.0f);
+    }
     DrawLine(win1,separator,-1.0f,separator,1.0f,true);
     PrepareRenderText();
     SetFontProperties(0.15f,0.4f,FONT_EDGE*4);
     SetFontSize(FONT_SIZE*1.0f);
     SetFontOutlineColor(0.0f,0.0f,0.0f);
     if(network){
-        SetFontColor(0.545f,0.580f,0.620f,1.0f);
+        if(uiTheme)SetFontColor(0.396f,0.427f,0.463f,1.0f);
+        else SetFontColor(0.545f,0.580f,0.620f,1.0f);
         PrintString(-win->aspect+0.025f,-1.0f+0.01f,false,"Round %d of %d",currentRound+1,network->rounds->tot);
         if(network->entities->tot==1)PrintString(-win->aspect+0.025f,-1.0f+0.07f,false,"1 agent");
         else PrintString(-win->aspect+0.025f,-1.0f+0.07f,false,"%d agents",network->entities->tot);

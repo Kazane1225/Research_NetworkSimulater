@@ -89,6 +89,7 @@ const LOCALE_JA = {
         optGrid:        'エージェントをグリッドに整列',
         optCaps:        'デフォルトを双方向リンクにする（Caps Lock）',
         optStudentMode: '学習モード',
+        optNetStats:    'ネットワーク統計を表示',
         // キャンバスラベル
         labelNetwork: 'ネットワーク',
         labelHistory: '履歴木',
@@ -103,6 +104,7 @@ const LOCALE_JA = {
         legTagTerm:    '（終了型）',
         // ネットワーク統計パネル
         statsTitle:   'ネットワーク統計',
+        statsShow:    'ネットワーク統計',
         statsAgents:  'エージェント数',
         statsLeaders: 'リーダー数',
         statsRounds:  'ラウンド数',

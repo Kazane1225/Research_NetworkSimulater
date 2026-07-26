@@ -89,6 +89,7 @@ const LOCALE_EN = {
         optGrid:        'Snap agents to grid',
         optCaps:        'Two-way links by default (Caps Lock)',
         optStudentMode: 'Student mode',
+        optNetStats:    'Show network stats',
         // Canvas labels
         labelNetwork: 'Network',
         labelHistory: 'History Tree',
@@ -103,6 +104,7 @@ const LOCALE_EN = {
         legTagTerm:    '(Terminating)',
         // Network stats panel
         statsTitle:   'Network Stats',
+        statsShow:    'Network Stats',
         statsAgents:  'Agents',
         statsLeaders: 'Leaders',
         statsRounds:  'Rounds',

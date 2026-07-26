@@ -7,6 +7,17 @@
     <title>Anonymous Dynamic Networks</title>
     <link rel="stylesheet" href="css/style.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
+    <script>
+    (function () {
+        try {
+            var t = localStorage.getItem('theme');
+            if (t !== 'light' && t !== 'dark') t = 'dark';
+            document.documentElement.setAttribute('data-theme', t);
+        } catch (_) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    })();
+    </script>
 </head>
 
 <body>
@@ -56,6 +67,7 @@
     <button class="tb-btn student-only" id="btn-help"     tabindex="-1" data-tip="Keyboard reference  H"><i data-lucide="help-circle"></i> <span data-i18n="btnHelp">Help</span></button>
 
     <div class="tb-sep"></div>
+    <button class="tb-btn icon-only" id="btn-theme" tabindex="-1" data-tip="Switch to light theme / ライトモード"><i data-lucide="sun" class="theme-icon-sun"></i><i data-lucide="moon" class="theme-icon-moon"></i></button>
     <button class="tb-btn" id="btn-lang" tabindex="-1" data-tip="Switch language / 言語切替">EN</button>
 
 </div>
@@ -93,6 +105,10 @@
         <span class="opt-key">⇪</span>
     </div>
     <div class="opt-sep"></div>
+    <div class="opt-row" id="opt-net-stats">
+        <span class="opt-label" data-i18n="optNetStats">Show network stats</span>
+        <span class="opt-toggle" id="opt-net-stats-toggle"></span>
+    </div>
     <div class="opt-row" id="opt-student-mode">
         <span class="opt-label" data-i18n="optStudentMode">Student mode</span>
         <span class="opt-toggle" id="opt-student-toggle"></span>
@@ -142,7 +158,10 @@
 
     <!-- ── Network stats panel (Network panel, bottom-left) ── -->
     <div id="net-stats">
-        <div class="stats-title" data-i18n="statsTitle">Network Stats</div>
+        <div class="stats-header">
+            <div class="stats-title" data-i18n="statsTitle">Network Stats</div>
+            <button type="button" id="net-stats-close" aria-label="Close network stats" data-tip="Hide Network Stats">✕</button>
+        </div>
         <div class="stats-grid">
             <span class="stats-label"><span data-i18n="statsAgents">Agents</span> <em>(n)</em></span>  <span class="stats-val" id="stat-agents">—</span>
             <span class="stats-label" data-i18n="statsLeaders">Leaders</span>                           <span class="stats-val" id="stat-leaders">—</span>
@@ -152,6 +171,7 @@
             <span class="stats-label" data-i18n="statsUnique">Uniquely identified</span>              <span class="stats-val" id="stat-unique">—</span>
         </div>
     </div>
+    <button type="button" id="net-stats-show" data-i18n="statsShow" data-tip="Show Network Stats">Network Stats</button>
 </div>
 
 <!-- ── Help modal ────────────────────────────────────────────────── -->
