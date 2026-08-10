@@ -55,6 +55,12 @@ void FlushEvents(void){
     while(SDL_PollEvent(&event));
 }
 
+// Runs as a ComputeJob completion callback: re-selects the history-tree node corresponding
+// to `userdata` (an Entity*) now that aux/finalLeaf have just been rebuilt.
+static void OnCompleteSelectEntity(void *userdata){
+    if(userdata)SelectNodeFromEntity((Entity*)userdata);
+}
+
 static void IncrementCurrentRound(void){
     if(currentRound<network->rounds->tot-1){
         currentRound++;
@@ -133,13 +139,16 @@ static void KeyPressed(SDL_Keycode key){
             }
             break;
         case SDLK_BACKSPACE:
-            if(currentRound>=0){
+            // Mutating actions are held off while a recompute job is still in flight (rather
+            // than cancelling it) so that a busy large network cannot be driven to insert/delete
+            // faster than it can ever finish recomputing -- e.g. from a held-down key firing
+            // native OS key-repeat events much faster than one full recompute can complete.
+            // This reproduces the natural pacing the previous fully-synchronous code had.
+            if(currentRound>=0 && !ComputeJob_IsActive()){
                 Entity *en=FirstEntityCorrespondingToSelectedNode();
                 DeleteInteractions(currentRound);
-                ExecuteNetwork();
-                if(en)SelectNodeFromEntity(en);
                 numSteps=-1;
-                CountingAlgorithm();
+                ComputeJob_RequestRecompute(OnCompleteSelectEntity,en,true);
                 win1->invalid=true;
                 DisplayMessage("Delete all links in current round");
             }
@@ -147,15 +156,15 @@ static void KeyPressed(SDL_Keycode key){
         case SDLK_DELETE:
         case SDLK_U:
             selectedNode=NULL;
-            if(selectedEntity!=-1&&network->entities->tot>1){
+            if(selectedEntity!=-1&&network->entities->tot>1&&!ComputeJob_IsActive()){
                 DeleteEntity(selectedEntity);
                 selectedEntity=-1;
                 drawingEdge=false;
-                ExecuteNetwork();
+                ComputeJob_RequestRecompute(NULL,NULL,false);
                 win1->invalid=true;
                 DisplayMessage("Delete selected agent");
             }
-            if(selectedNodeI!=-1 && selectedNodeJ!=-1){
+            if(selectedNodeI!=-1 && selectedNodeJ!=-1 && !ComputeJob_IsActive()){
                 bool changed=false;
                 for(int i=network->entities->tot-1;i>=0&&network->entities->tot>1;i--){
                     Entity *en=GetEntity(i);
@@ -166,7 +175,7 @@ static void KeyPressed(SDL_Keycode key){
                 }
                 if(changed){
                     selectedNodeI=selectedNodeJ=-1;
-                    ExecuteNetwork();
+                    ComputeJob_RequestRecompute(NULL,NULL,false);
                     win1->invalid=true;
                     DisplayMessage("Delete selected agents");
                 }
@@ -174,31 +183,27 @@ static void KeyPressed(SDL_Keycode key){
             break;
         case SDLK_EQUALS:
         case SDLK_KP_PLUS:
-            if(currentRound>=-1){
+            if(currentRound>=-1 && !ComputeJob_IsActive()){
                 e=FirstEntityCorrespondingToSelectedNode();
                 InsertRound(++currentRound,true);
                 if(selectedNodeI!=-1)selectedNodeI++;
-                ExecuteNetwork();
-                if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
-                CountingAlgorithm();
+                ComputeJob_RequestRecompute(OnCompleteSelectEntity,e,true);
                 win1->invalid=true;
                 DisplayMessage("Insert new round");
             }
             break;
         case SDLK_MINUS:
         case SDLK_KP_MINUS:
-            if(currentRound>=0){
+            if(currentRound>=0 && !ComputeJob_IsActive()){
                 e=FirstEntityCorrespondingToSelectedNode();
                 DeleteRound(currentRound);
                 if(currentRound==network->rounds->tot){
                     currentRound--;
                     if(selectedNodeI!=-1)selectedNodeI--;
                 }
-                ExecuteNetwork();
-                if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
-                CountingAlgorithm();
+                ComputeJob_RequestRecompute(OnCompleteSelectEntity,e,true);
                 win1->invalid=true;
                 DisplayMessage("Delete current round");
             }
@@ -239,12 +244,11 @@ static void KeyPressed(SDL_Keycode key){
                 }
                 int input=key-SDLK_0;
                 Entity *en=GetEntity(selectedEntity);
-                if(input!=en->input){
+                if(input!=en->input && !ComputeJob_IsActive()){
                     en->input=input;
                     SortLeaders();
-                    ExecuteNetwork();
                     numSteps=-1;
-                    CountingAlgorithm();
+                    ComputeJob_RequestRecompute(NULL,NULL,true);
                     win1->invalid=true;
                     DisplayMessage("Change input of selected agent");
                 }
@@ -256,19 +260,18 @@ static void KeyPressed(SDL_Keycode key){
                 }
                 int input=key-SDLK_0;
                 Entity *changed=NULL;
-                for(int i=0;i<network->entities->tot;i++){
-                    Entity *en=GetEntity(i);
-                    if(CorrespondsToSelectedNode(en) && input!=en->input){
-                        changed=en;
-                        en->input=input;
+                if(!ComputeJob_IsActive())
+                    for(int i=0;i<network->entities->tot;i++){
+                        Entity *en=GetEntity(i);
+                        if(CorrespondsToSelectedNode(en) && input!=en->input){
+                            changed=en;
+                            en->input=input;
+                        }
                     }
-                }
                 if(changed){
                     SortLeaders();
-                    ExecuteNetwork();
-                    SelectNodeFromEntity(changed);
                     numSteps=-1;
-                    CountingAlgorithm();
+                    ComputeJob_RequestRecompute(OnCompleteSelectEntity,changed,true);
                     win1->invalid=true;
                     DisplayMessage("Change input of selected agents");
                 }
@@ -282,13 +285,14 @@ static void KeyPressed(SDL_Keycode key){
             win1->invalid=true;
             break;
         case SDLK_O:
-            outAware=!outAware;
-            ExecuteNetwork();
-            numSteps=-1;
-            CountingAlgorithm();
-            win1->invalid=true;
-            if(outAware)DisplayMessage("Agents are outdegree-aware");
-            else DisplayMessage("Agents are not outdegree-aware");
+            if(!ComputeJob_IsActive()){
+                outAware=!outAware;
+                numSteps=-1;
+                ComputeJob_RequestRecompute(NULL,NULL,true);
+                win1->invalid=true;
+                if(outAware)DisplayMessage("Agents are outdegree-aware");
+                else DisplayMessage("Agents are not outdegree-aware");
+            }
             break;
         case SDLK_A:
             renderArrows=!renderArrows;
@@ -499,13 +503,14 @@ static void MousePressed1(SDL_MouseButtonEvent *button){ // specific to left pan
     if(button->button==SDL_BUTTON_RIGHT && !drawingEdge){
         int s=SelectEntityXY(button->x*win1->sx,button->y*win1->sy);
         if(s==-1){
-            AddEntity(1,ToWorldX(win1,button->x*win1->sx*2.0f/(1.0f+separator)),ToWorldY(win1,button->y*win1->sy));
-            selectedEntity=network->entities->tot-1;
-            ExecuteNetwork();
-            numSteps=-1;
-            CountingAlgorithm();
-            win1->invalid=true;
-            DisplayMessage("Create new agent");
+            if(!ComputeJob_IsActive()){
+                AddEntity(1,ToWorldX(win1,button->x*win1->sx*2.0f/(1.0f+separator)),ToWorldY(win1,button->y*win1->sy));
+                selectedEntity=network->entities->tot-1;
+                numSteps=-1;
+                ComputeJob_RequestRecompute(NULL,NULL,true);
+                win1->invalid=true;
+                DisplayMessage("Create new agent");
+            }
         }
         else{
             draggingEntity=true;
@@ -572,7 +577,7 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
             int s=SelectEntityXY(button->x*win1->sx,button->y*win1->sy);
             if(selectedEntity!=-1 && s!=-1){
                 if(currentRound<0)DisplayMessage("Cannot modify links before round 1");
-                else{
+                else if(!ComputeJob_IsActive()){
                     if(allRounds)
                         for(int r=0;r<network->rounds->tot;r++){
                             AddInteraction(r,selectedEntity,s,mult);
@@ -582,9 +587,8 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
                         AddInteraction(currentRound,selectedEntity,s,mult);
                         if(bothWays && selectedEntity!=s)AddInteraction(currentRound,s,selectedEntity,mult);
                     }
-                    ExecuteNetwork();
                     numSteps=-1;
-                    CountingAlgorithm();
+                    ComputeJob_RequestRecompute(NULL,NULL,true);
                     win1->invalid=true;
                     if(mult>0)DisplayMessage("Create new link");
                     else DisplayMessage("Delete link");

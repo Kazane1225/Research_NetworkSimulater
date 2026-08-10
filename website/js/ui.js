@@ -134,13 +134,18 @@ function waitForAnimationFrame() {
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
-async function waitForToolbarRoundChange(readState, previousState, timeoutMs = 2000) {
+// `retry` (optional) is re-invoked on every polled frame while `readState()` hasn't changed yet.
+// This is used to keep re-sending the key while the backend is still finishing a previous
+// recompute (during which the corresponding action is a harmless no-op on the C side), so a
+// held-down +/- button keeps advancing smoothly instead of stalling until `timeoutMs`.
+async function waitForToolbarRoundChange(readState, previousState, retry, timeoutMs = 2000) {
     const deadline = performance.now() + timeoutMs;
     while (performance.now() < deadline) {
         if (readState() !== previousState) {
             await waitForAnimationFrame();
             return true;
         }
+        if (retry) retry();
         await waitForAnimationFrame();
     }
     return false;
@@ -174,7 +179,7 @@ function bindToolbarKeyButton(id, key, code, opts = {}) {
                 intervalTimer = null;
                 continue;
             }
-            const changed = await waitForToolbarRoundChange(readRepeatState, beforeState);
+            const changed = await waitForToolbarRoundChange(readRepeatState, beforeState, trigger);
             if (!changed) break;
         }
     }
