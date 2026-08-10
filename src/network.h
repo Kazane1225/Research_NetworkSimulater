@@ -23,6 +23,10 @@ int GetEntityIndex(Entity *e);
 void SortLeaders(void); // put all leaders at the beginning of the list of entities
 void InitNetwork(int type,int n);
 void ExecuteNetwork(void);
+void ExecuteNetworkResetEntities(void); // step 1 of ExecuteNetwork: reset every entity's history (cheap, O(n))
+void ExecuteNetworkRunRound(int r); // step 2 of ExecuteNetwork: replay round r for all entities
+HistoryTree *ExecuteNetworkMergeEntity(HistoryTree *target,Entity *e); // step 3 of ExecuteNetwork: merge one entity's history into target, returns its finalLeaf
+void RecordRebuildPerf(double elapsedMs); // records elapsed compute time in the same perf counters ExecuteNetwork/RebuildFinalHistory use
 void ReExecuteLastRound(void); // re-execute only the last round using saved snapshots
 void RollBackLastRound(void);  // restore to pre-last-round state after last round was deleted
 void AppendLastRound(void);    // apply newly appended last round on top of current entity states
