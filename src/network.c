@@ -96,7 +96,7 @@ void InitNetwork(int type,int n){
     win1->invalid=true;
 }
 
-void ExecuteNetwork(void){
+void ExecuteNetworkResetEntities(void){
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
         if(e->history)FreeHistoryTree(e->history);
@@ -104,19 +104,35 @@ void ExecuteNetwork(void){
         e->current=e->history=NewHistoryTree();
         ExtendHistory(e);
     }
-    for(int r=0;r<network->rounds->tot;r++){
-        Vector *v=network->rounds->items[r];
-        for(int i=0;i<v->tot;i++)
-            ExecuteInteraction(v->items[i]);
-        for(int i=0;i<network->entities->tot;i++)
-            EndRound(GetEntity(i));
-    }
+}
+
+void ExecuteNetworkRunRound(int r){
+    Vector *v=network->rounds->items[r];
+    for(int i=0;i<v->tot;i++)
+        ExecuteInteraction(v->items[i]);
+    for(int i=0;i<network->entities->tot;i++)
+        EndRound(GetEntity(i));
+}
+
+HistoryTree *ExecuteNetworkMergeEntity(HistoryTree *target,Entity *e){
+    return MergeHistoryTrees(target,e->history,NULL);
+}
+
+// Synchronous version of what ComputeJob_RequestRecompute() does across multiple frames.
+// Used for full reloads (InitNetwork/LoadNetworkHelper/TutorialLoadNetwork) where there is no
+// previous graphic worth preserving frame-by-frame. Cancels any in-flight job first, since
+// that job's saved round/entity indices would otherwise no longer match `network` afterwards.
+void ExecuteNetwork(void){
+    ComputeJob_CancelActive();
+    ExecuteNetworkResetEntities();
+    for(int r=0;r<network->rounds->tot;r++)
+        ExecuteNetworkRunRound(r);
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
     double t0=PerfNowMs();
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
-        e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
+        e->finalLeaf=ExecuteNetworkMergeEntity(finalHistory,e);
     }
     ComputeAuxData(finalHistory);
     double elapsed=PerfNowMs()-t0;
@@ -124,6 +140,7 @@ void ExecuteNetwork(void){
 }
 
 void DoneNetwork(void){
+    ComputeJob_CancelActive(); // about to free entities/rounds a paused job might still reference
     if(!network)return;
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
@@ -247,6 +264,9 @@ static bool LoadNetworkHelper(SDL_IOStream *stream){
     float x,y;
     size_t length=0,readBytes=0;
     char ch;
+    // Cancel first: the global `network` pointer below is about to be swapped to a brand
+    // new (empty, then progressively filled) object, which a paused job must never see.
+    ComputeJob_CancelActive();
     Network *backup=network;
     network=malloc(sizeof(Network));
     network->entities=NewVector(8);

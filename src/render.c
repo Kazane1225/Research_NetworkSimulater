@@ -326,4 +326,11 @@ void RenderWindow1(WindowData *win){
         SetFontColor(0.0f,0.8f,0.8f,1.0f);
         PrintString(-win->aspect+0.025f,1.0f-0.075f,false,"%s",infoMessage);
     }
+    if(ComputeJob_IsActive()){
+        static const char *spinnerFrames[]={"|","/","-","\\"};
+        double elapsedMs=ComputeJob_ElapsedMs();
+        int frame=((int)(elapsedMs/120.0))&3;
+        SetFontColor(1.0f,0.7f,0.0f,1.0f);
+        PrintString(-win->aspect+0.025f,1.0f-0.13f,false,"%s Computing... %.1fs",spinnerFrames[frame],elapsedMs/1000.0);
+    }
 }
