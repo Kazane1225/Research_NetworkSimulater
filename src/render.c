@@ -355,4 +355,19 @@ void RenderWindow1(WindowData *win){
         SetFontColor(0.0f,0.8f,0.8f,1.0f);
         PrintString(-win->aspect+0.025f,1.0f-0.075f,false,"%s",infoMessage);
     }
+    // Explicit, hard-to-miss indicator that the compute worker thread is still busy: shown
+    // centered at the top of the whole window (spanning both panels) for as long as
+    // ComputeJob_IsActive() is true, so the user always knows why the history-tree panel (or
+    // an edit they just tried to make) hasn't updated yet.
+    if(ComputeJob_IsActive()){
+        static const char *spinnerFrames[]={"|","/","-","\\"};
+        double elapsedMs=ComputeJob_ElapsedMs();
+        int frame=((int)(elapsedMs/120.0))&3;
+        PrepareRenderText();
+        SetFontProperties(0.2f,0.4f,FONT_EDGE*5);
+        SetFontSize(FONT_SIZE*1.3f);
+        SetFontOutlineColor(0.0f,0.0f,0.0f);
+        SetFontColor(1.0f,0.65f,0.0f,1.0f);
+        PrintString(0.0f,1.0f-0.09f,true,"%s COMPUTING... %.1fs",spinnerFrames[frame],elapsedMs/1000.0);
+    }
 }
