@@ -83,6 +83,14 @@ double ComputeJob_ElapsedMs(void){
     return PerfNowMs()-jobStartMs;
 }
 
+// Exposed to JS so the toolbar's press-and-hold auto-repeat (website/js/ui.js) can wait for the
+// backend to become idle before firing the next repeat, instead of firing anyway, having the
+// edit silently rejected by CanMutateNetwork() (events.c), and then giving up entirely once it
+// waits in vain for a round-count change that will never come.
+EMSCRIPTEN_KEEPALIVE int IsComputeJobBusy(void){
+    return ComputeJob_IsActive()?1:0;
+}
+
 void ComputeJob_WaitForIdle(void){
     pthread_mutex_lock(&jobMutex);
     while(state==CJ_DISPATCHED||state==CJ_RUNNING)pthread_cond_wait(&jobCond,&jobMutex);
