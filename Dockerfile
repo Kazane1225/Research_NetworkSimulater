@@ -2,6 +2,21 @@ FROM emscripten/emsdk:latest
 
 WORKDIR /project
 
+# Build SDL3 from source, with -pthread, once as part of the image so the container is fully
+# self-contained. This is required because the app now uses a real background compute worker
+# thread (src/compute_job.c), which needs every linked object -- including SDL3 itself -- to be
+# built with pthread/atomics support; a prebuilt, non-pthread SDL3 (e.g. mounted in from the
+# host via a stale SDL3_PREFIX) fails to link against pthread-enabled application code.
+RUN apt-get update && apt-get install -y --no-install-recommends git cmake && \
+    rm -rf /var/lib/apt/lists/* && \
+    git clone --depth 1 https://github.com/libsdl-org/SDL.git /tmp/sdl3src && \
+    cd /tmp/sdl3src && \
+    emcmake cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_STATIC=ON -DSDL_SHARED=OFF \
+      -DSDL_TESTS=OFF -DCMAKE_C_FLAGS=-pthread -DCMAKE_INSTALL_PREFIX=/sdl3prefix && \
+    emmake cmake --build build -j"$(nproc)" && \
+    emmake cmake --install build && \
+    cd / && rm -rf /tmp/sdl3src
+
 CMD mkdir -p website && \
     rm -f website/index.js website/index.data website/index.wasm && \
     emcc \
