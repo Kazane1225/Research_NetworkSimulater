@@ -136,7 +136,8 @@ static void KeyPressed(SDL_Keycode key){
             if(currentRound>=0){
                 Entity *en=FirstEntityCorrespondingToSelectedNode();
                 DeleteInteractions(currentRound);
-                ExecuteNetwork();
+                if(currentRound==network->rounds->tot-1)ReExecuteLastRound();
+                else ExecuteNetwork();
                 if(en)SelectNodeFromEntity(en);
                 numSteps=-1;
                 CountingAlgorithm();
@@ -178,8 +179,13 @@ static void KeyPressed(SDL_Keycode key){
                 e=FirstEntityCorrespondingToSelectedNode();
                 InsertRound(++currentRound,true);
                 if(selectedNodeI!=-1)selectedNodeI++;
-                ExecuteNetwork();
-                if(e)SelectNodeFromEntity(e);
+                if(currentRound==network->rounds->tot-1){
+                    AppendLastRound();
+                    if(e)SelectNodeFromEntity(e);
+                } else {
+                    ExecuteNetwork();
+                    if(e)SelectNodeFromEntity(e);
+                }
                 numSteps=-1;
                 CountingAlgorithm();
                 win1->invalid=true;
@@ -194,9 +200,12 @@ static void KeyPressed(SDL_Keycode key){
                 if(currentRound==network->rounds->tot){
                     currentRound--;
                     if(selectedNodeI!=-1)selectedNodeI--;
+                    RollBackLastRound();
+                    if(e)SelectNodeFromEntity(e);
+                } else {
+                    ExecuteNetwork();
+                    if(e)SelectNodeFromEntity(e);
                 }
-                ExecuteNetwork();
-                if(e)SelectNodeFromEntity(e);
                 numSteps=-1;
                 CountingAlgorithm();
                 win1->invalid=true;
@@ -303,14 +312,14 @@ static void KeyPressed(SDL_Keycode key){
             if(outAware)
                 switch(renderLinks){
                     case 0: DisplayMessage("Display all red edges and outdegrees"); break;
-                    case 1: DisplayMessage("Display red edges and outdegrees in selected view"); break;
+                    case 1: DisplayMessage("Display red edges and outdegrees in selected Vista"); break;
                     case 2: DisplayMessage("Do not display red edges and outdegrees"); break;
                     default: break;
                 }
             else
                 switch(renderLinks){
                     case 0: DisplayMessage("Display all red edges"); break;
-                    case 1: DisplayMessage("Display red edges in selected view"); break;
+                    case 1: DisplayMessage("Display red edges in selected Vista"); break;
                     case 2: DisplayMessage("Do not display red edges"); break;
                     default: break;
                 }
@@ -582,7 +591,8 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
                         AddInteraction(currentRound,selectedEntity,s,mult);
                         if(bothWays && selectedEntity!=s)AddInteraction(currentRound,s,selectedEntity,mult);
                     }
-                    ExecuteNetwork();
+                    if(!allRounds && currentRound==network->rounds->tot-1)ReExecuteLastRound();
+                    else ExecuteNetwork();
                     numSteps=-1;
                     CountingAlgorithm();
                     win1->invalid=true;
@@ -735,3 +745,13 @@ void Events(void){
         capsPressed=false;
     }
 }
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE void TestInsertRound(void){
+    KeyPressed(SDLK_EQUALS);
+}
+
+EMSCRIPTEN_KEEPALIVE void TestDeleteRound(void){
+    KeyPressed(SDLK_MINUS);
+}
+#endif

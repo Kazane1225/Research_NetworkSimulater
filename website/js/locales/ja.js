@@ -7,7 +7,7 @@ const LOCALE_JA = {
         null,
         {
             title:      '安定化カウントアルゴリズム',
-            desc:       '各ラウンドでエージェントは Vista を交換します。アルゴリズムは最初の non-branching level を見つけ、赤辺の多重度の比を使ってリーダーから匿名性の推定を広げます。途中の推定は間違うことがありますが、ラウンド 2n \u2212 2 までには正しい n に安定することが保証されます。',
+            desc:       '各ラウンドでエージェントは Vista を交換します。アルゴリズムは Vista 内の最初の non-branching level を見つけ、赤辺の多重度の比を使ってリーダーから匿名性の推定を広げます。途中の推定は間違うことがありますが、ラウンド 2n \u2212 2 までには正しい n に安定することが保証されます。',
             boundLabel: '安定するラウンド',
             bound:      n => n > 0 ? `2n \u2212 2 = ${2 * n - 2}` : '\u2014',
         },
@@ -21,12 +21,12 @@ const LOCALE_JA = {
 
     tutorial: [
         { title: 'ツアーへようこそ',         text: 'メインUIエリアの簡単なガイドです。「次へ」を押して進む、「\u2190前へ」で戻る、または「\u2715」でいつでも閉じることができます。',                                                                                                                                                                                                     sel: null              },
-        { title: 'キャンバス',               text: 'メインエリアは2つに分かれています。左半分：ネットワーク—円はエージェント（固有IDを持たない匿名の計算主体）です。右半分：履歴木—各エージェントがラウンドごとに観測した内容を記録します。2つのエージェントは、履歴木が同一の場合にのみ区別不可能です。',                                                                            sel: '#canvas-wrap'    },
+        { title: 'キャンバス',               text: 'メインエリアは2つに分かれています。左：ネットワーク（匿名エージェント）。右：History Tree（ネットワーク全体の履歴木）。各エージェントは Vista（部分履歴）を持ち、エージェントまたはノードを選択すると右パネルに Vista がハイライトされます。2つのエージェントは Vista が同型のとき区別不可能です。',                                                                            sel: '#canvas-wrap'    },
         { title: 'ダイナミックラウンド',      text: 'エッジはラウンドごとに変化します—それがネットワークを動的にしている理由です。ツールバーの\u25b2/\u25bcまたはキャンバス上のスクロールホイールを使ってラウンドを移動し、トポロジの変化を観察してください。',                                                                                                                   sel: '#btn-prev-round' },
         { title: 'カウントアルゴリズム',      text: '「安定化」または「終了型」を有効にしてカウントアルゴリズムを実行します。ツールバー下にアルゴリズムの説明と理論上のラウンド上界を示すバナーが表示されます。',                                                                                                                                                                 sel: '.algo-group'     },
-        { title: 'ステップの実行',            text: 'エージェントまたは履歴木ノードを選択し、\u25b6ステップを押す（またはSpace）とアルゴリズムが1ステップ進みます。アルゴリズムがネットワークサイズを推定するにつれて、履歴木ノードの色が変化します。',                                                                                                                       sel: '#btn-step'       },
+        { title: 'ステップの実行',            text: 'エージェントまたは History Tree ノードを選択し、\u25b6ステップ（またはSpace）で1ステップ進みます。選択中エージェントの Vista 上でノードの色が変わります。',                                                                                                                       sel: '#btn-step'       },
         { title: 'ネットワークの読み込み',    text: '「読込」をクリックして networks/ フォルダからサンプルを開きます。DefaultNetwork2.txt が入門として最適です。BoldiVigna.txt は研究文献でよく知られた例です。',                                                                                                                                                               sel: '#btn-load'       },
-        { title: 'ネットワーク統計',          text: '左下の「ネットワーク統計」パネルにはリアルタイム情報が表示されます：エージェント数 n、ラウンド数 T、匿名性クラス数、および現時点で一意に特定されたエージェント数。',                                                                                                                                                        sel: '#net-stats'      },
+        { title: 'ネットワーク統計',          text: '左下のネットワーク統計：エージェント数 n、ラウンド数 T、区別可能クラス数、一意に特定されたエージェント数。',                                                                                                                                                        sel: '#net-stats'      },
         { title: '完了！',                   text: 'これで探索の準備ができました！「用語集」で重要な用語を確認し、ヘルプ（H）でキーボードショートカットを参照してください。さまざまなネットワークを読み込んで、2つのアルゴリズムの動作を比較してみましょう。',                                                                                                                    sel: null              },
     ],
 
@@ -54,7 +54,8 @@ const LOCALE_JA = {
 
     commentary: {
         uniqueIdentified: (du, unique, n) => `+${du} エージェントを一意に特定  (${unique} / ${n})`,
-        classesChanged:   (from, to)       => `匿名性クラス: ${from} \u2192 ${to}`,
+        classesChanged:   (from, to)       => `区別可能クラス: ${from} \u2192 ${to}`,
+        nodesGuessed:     (dg, total)      => `${dg} ノードに推定値を割り当て  (${total} 合計)`,
         rootGuessChanged: (was, now, ok)   => `ルート推定値: ${was} \u2192 ${now}${ok ? '  \u2713 正解！' : ''}`,
         noChange:         '変化なし — 別のエージェントを選択して試してください。',
     },
@@ -88,6 +89,7 @@ const LOCALE_JA = {
         optGrid:        'エージェントをグリッドに整列',
         optCaps:        'デフォルトを双方向リンクにする（Caps Lock）',
         optStudentMode: '学習モード',
+        optNetStats:    'ネットワーク統計を表示',
         // キャンバスラベル
         labelNetwork: 'ネットワーク',
         labelHistory: '履歴木',
@@ -102,6 +104,7 @@ const LOCALE_JA = {
         legTagTerm:    '（終了型）',
         // ネットワーク統計パネル
         statsTitle:   'ネットワーク統計',
+        statsShow:    'ネットワーク統計',
         statsAgents:  'エージェント数',
         statsLeaders: 'リーダー数',
         statsRounds:  'ラウンド数',
@@ -185,19 +188,20 @@ const LOCALE_JA = {
         // 用語集モーダル
         glossaryTitle: 'Anonymous Dynamic Networks — 用語集',
         glossaryClose: '\u2715 閉じる',
-        glossaryContent: `<div class="gl-entry"><div class="gl-term">エージェント（Agent）</div><div class="gl-def">ネットワーク内の計算主体。エージェントは固有識別子を持ちません—<em>匿名</em>です。各エージェントは整数の<em>入力</em>値から始まります（0 = リーダー）。</div></div>
+                glossaryContent: `<div class="gl-entry"><div class="gl-term">エージェント（Agent）</div><div class="gl-def">ネットワーク内の計算主体。エージェントは固有識別子を持ちません—<em>匿名</em>です。各エージェントは整数の<em>入力</em>値から始まります（0 = リーダー）。</div></div>
 <div class="gl-entry"><div class="gl-term">リーダー（Leader）</div><div class="gl-def">入力値0を持つ特別なエージェントで、シミュレータでは<strong>L</strong>と表示されます。カウントアルゴリズムは、エージェントの総数<em>n</em>を決定するための基準点としてリーダーを使用します。</div></div>
 <div class="gl-entry"><div class="gl-term">動的ネットワーク（Dynamic Network）</div><div class="gl-def">通信リンクがラウンドごとに変化するネットワーク。静的ネットワークとは異なり、エッジは永続的ではありません—敵対者によって制御される可能性があります。エージェントが固定されたトポロジに依存できないことが主な課題です。</div></div>
 <div class="gl-entry"><div class="gl-term">ラウンド（Round）</div><div class="gl-def">通信の1タイムステップ。各ラウンドでは一連の有向リンクが有効で、エージェントはそれらのリンクに沿ってのみメッセージを交換します。シミュレータでは<strong>\u2191 / \u2193</strong>またはスクロールホイールでラウンドを閲覧できます。</div></div>
 <div class="gl-entry"><div class="gl-term">インタラクション/リンク（Interaction / Link）</div><div class="gl-def">あるラウンドにおけるエージェントAからエージェントBへの有向エッジ：AがBにメッセージを送ります。<em>多重度</em>は送られるメッセージの並行コピー数を表し、カウントアルゴリズムに影響します。</div></div>
-<div class="gl-entry"><div class="gl-term">履歴木（History Tree）</div><div class="gl-def">エージェントがこれまでに観測したすべてを記録するツリー。ルートは初期状態で、各レベルは1ラウンド分の観測を追加します。2つのエージェントは、履歴木が同一の場合にのみ<em>区別不可能</em>です。シミュレータの右パネルでこのツリーを視覚化できます。</div></div>
-<div class="gl-entry"><div class="gl-term">匿名性クラス（Anonymity Class）</div><div class="gl-def">同一の履歴木を持つエージェントのグループ—互いを区別できません。クラスのサイズがその<em>匿名性</em>です。匿名性1は、そのエージェントが履歴によって一意に識別可能であることを意味します。</div></div>
+<div class="gl-entry"><div class="gl-term">履歴木（History Tree）</div><div class="gl-def">ネットワーク全体の履歴構造。右パネルに表示され、各レベルはそのラウンドの<strong>区別可能クラス</strong>（distinguishable class）を表します。全エージェントの Vista をマージした全体像です（実装名 <code>finalHistory</code>）。</div></div>
+<div class="gl-entry"><div class="gl-term">ビスタ（Vista）</div><div class="gl-def">各エージェントが持つ History Tree の<strong>部分履歴</strong>—そのエージェントがこれまでに集めた観測情報です。ラウンドごとに拡張されます。シミュレータではエージェントまたは History Tree ノードを選択すると、右パネル上でその Vista がハイライト表示されます（明るいノードとエッジ）。</div></div>
+<div class="gl-entry"><div class="gl-term">区別可能クラス（Distinguishable Class）</div><div class="gl-def">ある時点で区別不可能なエージェントのグループ。History Tree の各ノードが1クラスを表し、ノードの<strong>匿名性</strong>はクラスのサイズ（そのクラスに属するエージェント数）です。匿名性1は一意に識別可能であることを意味します。</div></div>
 <div class="gl-entry"><div class="gl-term">カウント問題（Counting Problem）</div><div class="gl-def">エージェントの総数<em>n</em>を決定するタスク。エージェントは匿名であるため、単純に自分たちを数えることはできません—複数ラウンドにわたる受信メッセージのパターンから<em>n</em>を推論する必要があります。</div></div>
 <div class="gl-entry"><div class="gl-term">安定化アルゴリズム（Stabilizing Algorithm）</div><div class="gl-def">やがて正しい答えを出し、<em>それ以降は変えません</em>。ただし安定する前は誤った値を出してよいアルゴリズムです。停止信号はありません。ラウンド 2n \u2212 2 までに安定することが保証されます。<strong>安定化</strong>で選択します。</div></div>
 <div class="gl-entry"><div class="gl-term">終了型アルゴリズム（Terminating Algorithm）</div><div class="gl-def">正しい答えを出してから<em>停止</em>し、正しさの証明書付きで完了を示します。安定化より強い保証で、止まった時点の答えは証明済みです。上界は 3n \u2212 3。<strong>終了型</strong>で選択します。</div></div>
 <div class="gl-entry"><div class="gl-term">出次数認識（Outdegree Awareness）</div><div class="gl-def">オプション機能（<strong>O</strong>で切替）で、各エージェントが前のラウンドで<em>送信した</em>メッセージ数も把握します。この追加情報により、アルゴリズムがより速くまたはより正確な推定ができる場合があります。</div></div>
-<div class="gl-entry"><div class="gl-term">Non-Branching Level（分岐なしレベル）</div><div class="gl-def">履歴木で、見えるノードがどれも子をちょうど1つだけ持つレベル。ここでは赤辺の多重度の比が匿名性の比と一致するため、安定化アルゴリズムはリーダーから推定を広げられます。</div></div>
+<div class="gl-entry"><div class="gl-term">Non-Branching Level（分岐なしレベル）</div><div class="gl-def">History Tree の各ノードがちょうど1つの子だけを持つレベル（分岐がない）。2つの non-branching ノードの子同士が赤エッジで互いを結ぶとき、多重度の比は匿名性の比と一致します。安定化アルゴリズムは Vista 内の最初の non-branching level から、リーダーを起点に匿名性推定を伝播します。</div></div>
 <div class="gl-entry"><div class="gl-term">Isle / Cut（終了型）</div><div class="gl-def">Vista 内で検証された構造で、正しさの証明書として使います。終了型は guesser と heavy node で推測を積み、isle や cut がカウントを確認してから初めて確定します。</div></div>
-<div id="glossary-ref">理論的背景: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a></div>`,
+<div id="glossary-ref">参考文献: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a> (Viglietta, arXiv 2024)</div>`,
     },
 };

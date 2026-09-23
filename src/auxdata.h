@@ -25,6 +25,8 @@ Vector *GetLevel(int i);
 AuxData *GetAuxData(int i,int j);
 void ResetAuxDataVariables(void);
 void ComputeAuxData(HistoryTree *h);
+void AppendAuxDataOneLevel(void);
+void TrimAuxDataOneLevel(void);
 void FreeAuxData(void);
 void SelectView(void);
 void SelectNodeXY(int x,int y,int *si,int *sj);

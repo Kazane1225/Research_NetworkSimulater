@@ -2,6 +2,20 @@
 
 static float lineWidth=1.0f;
 static float vertices[26*4];
+int uiTheme=0; /* 0 = dark, 1 = light */
+
+void ApplyClearColor(void){
+    if(uiTheme)glClearColor(0.957f,0.965f,0.973f,1.0f); /* #f4f6f8 */
+    else glClearColor(0.051f,0.067f,0.090f,1.0f);       /* #0d1117 */
+}
+
+#ifdef __EMSCRIPTEN__
+EMSCRIPTEN_KEEPALIVE
+#endif
+void SetUiTheme(int theme){
+    uiTheme=theme?1:0;
+    if(win1)win1->invalid=true;
+}
 
 #ifdef __EMSCRIPTEN__
 static bool LoadOpenGLFunctions(void){
@@ -144,7 +158,7 @@ WindowData *NewWindow(const char *title,void(*renderFunction)(struct WindowData*
     SDL_GetWindowSize(win->window,&win->w,&win->h);
     SetWindowViewport(win);
     InitShader();
-    glClearColor(0.051f,0.067f,0.090f,1.0f);
+    ApplyClearColor();
     glClear(GL_COLOR_BUFFER_BIT);
     SDL_GL_SwapWindow(win->window);
     win->invalid=true;
@@ -180,7 +194,7 @@ void SetWindowViewport(WindowData *win){
 void RenderWindow(WindowData *win){
     if(!win->invalid)return;
     SetWindowViewport(win);
-    glClearColor(0.051f,0.067f,0.090f,1.0f);
+    ApplyClearColor();
     glClear(GL_COLOR_BUFFER_BIT);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
@@ -406,7 +420,11 @@ void DrawLabel(WindowData *win,float x1,float y1,float x2,float y2,int label,flo
         x3=DiscretizeX(win,x3);
         y3=DiscretizeY(win,y3);
     }
-    if(col)SetColor(255,220,220);
+    if(col){
+        if(uiTheme)SetColor(255,182,182);
+        else SetColor(255,220,220);
+    }
+    else if(uiTheme)SetColor(255,255,255);
     else SetColor(224,224,224);
     DrawEllipse(win,x3,y3,rx,ry,true,dark?2:1,discretize);
     PrepareRenderText();

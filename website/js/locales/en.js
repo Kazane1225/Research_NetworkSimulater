@@ -7,7 +7,7 @@ const LOCALE_EN = {
         null,
         {
             title:      'Stabilizing Counting Algorithm',
-            desc:       'Agents exchange vistas each round. The algorithm finds the first non-branching level and uses red-edge multiplicity ratios to propagate anonymity estimates from the leader. Early guesses may be wrong, but the output is guaranteed to stabilise on the correct count n by round 2n \u2212 2.',
+            desc:       'Agents exchange vistas each round. The algorithm finds the first non-branching level in its vista and uses red-edge multiplicity ratios to propagate anonymity estimates from the leader. Early guesses may be wrong, but the output is guaranteed to stabilise on the correct count n by round 2n \u2212 2.',
             boundLabel: 'Stabilizes by round',
             bound:      n => n > 0 ? `2n \u2212 2 = ${2 * n - 2}` : '\u2014',
         },
@@ -21,12 +21,12 @@ const LOCALE_EN = {
 
     tutorial: [
         { title: 'Welcome to the Tour',   text: 'A quick walkthrough of the main UI areas. Press Next to continue, \u2190 Prev to go back, or \u2715 to close at any time.',                                                                                                                                                                                                                                                          sel: null           },
-        { title: 'The Canvas',            text: 'The main area is split in two. Left half: the network \u2014 circles are agents, anonymous computing entities with no unique ID. Right half: the History Tree \u2014 records what each agent has observed round by round. Two agents are indistinguishable if and only if their history trees are identical.',                                                                          sel: '#canvas-wrap' },
+        { title: 'The Canvas',            text: 'The main area is split in two. Left: the network \u2014 anonymous agents (circles). Right: the History Tree \u2014 the network-wide merged history. Each agent holds a Vista (partial history); select an agent or node to highlight its Vista on the right. Two agents are indistinguishable iff their vistas are isomorphic.', sel: '#canvas-wrap' },
         { title: 'Dynamic Rounds',        text: 'Edges can change every round \u2014 that\u2019s what makes the network dynamic. Use \u25b2 / \u25bc in the toolbar or the scroll wheel on the canvas to step through rounds and watch the topology evolve.',                                                                                                                                                                          sel: '#btn-prev-round' },
         { title: 'Counting Algorithms',   text: 'Activate Stabilizing or Terminating to run a counting algorithm. A banner appears below the toolbar with a description of the algorithm and its theoretical round bound.',                                                                                                                                                                                                            sel: '.algo-group'  },
-        { title: 'Executing Steps',       text: 'Select an agent or history-tree node, then press \u25b6 Step (or Space) to run one algorithm step. History-tree nodes change colour as the algorithm deduces the network size.',                                                                                                                                                                                                      sel: '#btn-step'    },
+        { title: 'Executing Steps',       text: 'Select an agent or History Tree node, then press \u25b6 Step (or Space) to run one algorithm step. Node colours change on the selected agent\u2019s Vista.',                                                                                                                                                                                                      sel: '#btn-step'    },
         { title: 'Loading Networks',      text: 'Click Load to open an example from the networks/ folder. DefaultNetwork2.txt is a good starting point; BoldiVigna.txt is a well-known example from the research literature.',                                                                                                                                                                                                         sel: '#btn-load'    },
-        { title: 'Network Stats',         text: 'The Network Stats panel (bottom-left) shows live information: agent count n, round count T, anonymity classes, and how many agents are uniquely identified so far.',                                                                                                                                                                                                                  sel: '#net-stats'   },
+        { title: 'Network Stats',         text: 'The Network Stats panel (bottom-left): agent count n, round count T, distinguishable classes, and uniquely identified agents.',                                                                                                                                                                                                                  sel: '#net-stats'   },
         { title: 'All Done!',             text: 'You\u2019re ready to explore! Open Glossary for key term definitions and Help (H) for keyboard shortcuts. Try loading different networks and comparing how both algorithms behave.',                                                                                                                                                                                                   sel: null           },
     ],
 
@@ -54,8 +54,9 @@ const LOCALE_EN = {
 
     commentary: {
         uniqueIdentified: (du, unique, n) => `+${du} agent${du > 1 ? 's' : ''} uniquely identified  (${unique} / ${n})`,
-        classesChanged:   (from, to)       => `Anonymity classes: ${from} \u2192 ${to}`,
+        classesChanged:   (from, to)       => `Distinguishable classes: ${from} \u2192 ${to}`,
         rootGuessChanged: (was, now, ok)   => `Root guess: ${was} \u2192 ${now}${ok ? '  \u2713 correct!' : ''}`,
+        nodesGuessed:     (dg, total)      => `${dg} node${dg > 1 ? 's' : ''} assigned a guess  (${total} total)`,
         noChange:         'No observable change \u2014 try selecting a different agent.',
     },
 
@@ -88,6 +89,7 @@ const LOCALE_EN = {
         optGrid:        'Snap agents to grid',
         optCaps:        'Two-way links by default (Caps Lock)',
         optStudentMode: 'Student mode',
+        optNetStats:    'Show network stats',
         // Canvas labels
         labelNetwork: 'Network',
         labelHistory: 'History Tree',
@@ -102,6 +104,7 @@ const LOCALE_EN = {
         legTagTerm:    '(Terminating)',
         // Network stats panel
         statsTitle:   'Network Stats',
+        statsShow:    'Network Stats',
         statsAgents:  'Agents',
         statsLeaders: 'Leaders',
         statsRounds:  'Rounds',
@@ -190,14 +193,15 @@ const LOCALE_EN = {
 <div class="gl-entry"><div class="gl-term">Dynamic Network</div><div class="gl-def">A network whose communication links can change every round. Unlike static networks, edges are not permanent \u2014 they may be controlled by an adversary. The key challenge is that agents cannot rely on a fixed topology.</div></div>
 <div class="gl-entry"><div class="gl-term">Round</div><div class="gl-def">One time step of communication. In each round a set of directed links is active and agents exchange messages only along those links. Use <strong>\u2191 / \u2193</strong> or the scroll wheel to browse rounds in the simulator.</div></div>
 <div class="gl-entry"><div class="gl-term">Interaction (Link)</div><div class="gl-def">A directed edge from agent A to agent B in a given round: A sends a message to B. The <em>multiplicity</em> counts how many parallel copies of the message are sent, which matters for the counting algorithms.</div></div>
-<div class="gl-entry"><div class="gl-term">History Tree</div><div class="gl-def">A tree that records everything an agent has observed so far. The root is the initial state; each level adds one more round of observations. Two agents are <em>indistinguishable</em> if and only if they share the same history tree. The right panel of the simulator visualises this tree.</div></div>
-<div class="gl-entry"><div class="gl-term">Anonymity Class</div><div class="gl-def">A group of agents with <em>identical</em> history trees \u2014 they cannot tell each other apart. The size of the class is its <em>anonymity</em>. An anonymity of 1 means the agent is uniquely identifiable by its history.</div></div>
+<div class="gl-entry"><div class="gl-term">History Tree</div><div class="gl-def">The network-wide history structure shown in the right panel. Each level lists <strong>distinguishable classes</strong> at that round. All agents\u2019 vistas are merged into this global tree (implementation name <code>finalHistory</code>).</div></div>
+<div class="gl-entry"><div class="gl-term">Vista</div><div class="gl-def">Each agent\u2019s <strong>partial</strong> history tree \u2014 everything that agent has observed so far. It expands each round as agents exchange messages. In the simulator, select an agent or History Tree node to highlight its vista (bright nodes and edges).</div></div>
+<div class="gl-entry"><div class="gl-term">Distinguishable Class</div><div class="gl-def">A group of agents that are indistinguishable at a given time. Each node in the History Tree represents one class; the node\u2019s <em>anonymity</em> is the class size (number of agents in that class). An anonymity of 1 means the agent is uniquely identifiable.</div></div>
 <div class="gl-entry"><div class="gl-term">Counting Problem</div><div class="gl-def">The task of determining the total number of agents <em>n</em>. Because agents are anonymous they cannot simply count themselves \u2014 they must deduce <em>n</em> from the patterns of messages received over multiple rounds.</div></div>
 <div class="gl-entry"><div class="gl-term">Stabilizing Algorithm</div><div class="gl-def">Eventually outputs the correct answer and <em>never changes it again</em>, but may output wrong values before it settles. It has no halt signal. Guaranteed to stabilise by round 2n \u2212 2. Select <strong>Stabilizing</strong>.</div></div>
 <div class="gl-entry"><div class="gl-term">Terminating Algorithm</div><div class="gl-def">Outputs the correct answer and then <em>halts</em> with a correctness certificate. Stronger than stabilizing: once it stops, the answer is proven correct. Bound 3n \u2212 3. Select <strong>Terminating</strong>.</div></div>
 <div class="gl-entry"><div class="gl-term">Outdegree Awareness</div><div class="gl-def">An optional capability (toggle with <strong>O</strong>) where each agent also knows how many messages it <em>sent</em> in the previous round. This extra information can help the algorithm make faster or more accurate guesses.</div></div>
-<div class="gl-entry"><div class="gl-term">Non-Branching Level</div><div class="gl-def">A History Tree level where every visible node has exactly one child. On such a level, red-edge multiplicity ratios equal anonymity ratios, so the stabilizing algorithm can propagate estimates from the leader.</div></div>
+<div class="gl-entry"><div class="gl-term">Non-Branching Level</div><div class="gl-def">A level in the History Tree where every node has exactly one child (no branching). When red edges connect two such nodes to each other\u2019s child, the ratio of multiplicities equals the ratio of anonymities. The stabilizing algorithm uses the first non-branching level in its vista to propagate anonymity guesses from the leader outward.</div></div>
 <div class="gl-entry"><div class="gl-term">Isle / Cut (Terminating)</div><div class="gl-def">Verified structure in a vista used as a correctness certificate. Terminating builds guesses via guessers and heavy nodes, then commits only after an isle or cut confirms the count.</div></div>
-<div id="glossary-ref">Theoretical background: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener">arxiv.org/abs/2404.02673</a></div>`,
+<div id="glossary-ref">Further reading: <a href="https://arxiv.org/abs/2404.02673" target="_blank" rel="noopener"><em>History Trees and Their Applications</em></a> (Viglietta, arXiv 2024)</div>`,
     },
 };
