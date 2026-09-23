@@ -1,6 +1,6 @@
 #include "main.h"
 
-Vector *aux=NULL; // Vector of Vector of AuxData
+_Thread_local Vector *aux=NULL; // Vector of Vector of AuxData
 AuxData *selectedNode=NULL;
 
 Vector *GetLevel(int i){
@@ -81,7 +81,6 @@ static void ComputeAuxDataCoordinates(int i,int j,float x1,float y1,float x2,flo
 }
 
 static void ComputeAuxDataRedEdges(void){
-    SetWindowContext(win1);
     /* For each level i, build a hash map HistoryTree* → AuxData-index for level i-1,
        reducing the lookup from O(n) linear scan to O(1).
        Overall cost drops from O(R×n²×obs) to O(R×n×obs).                          */
@@ -112,10 +111,11 @@ static void ComputeAuxDataRedEdges(void){
     }
 }
 
-static void ComputeAuxDataAnonymities(void){
+// finalLeaf (may be NULL): see header comment on ComputeAuxData for when each is correct.
+static void ComputeAuxDataAnonymities(HistoryTree **finalLeaf){
     for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        ((AuxData*)e->finalLeaf->data)->anonymity++;
+        HistoryTree *leaf=finalLeaf?finalLeaf[i]:GetEntity(i)->finalLeaf;
+        ((AuxData*)leaf->data)->anonymity++;
     }
     for(int i=aux->tot-2;i>=0;i--)
         for(int j=0;j<GetLevel(i)->tot;j++){
@@ -142,13 +142,13 @@ void ResetAuxDataVariables(void){
     }
 }
 
-void ComputeAuxData(HistoryTree *h){
+void ComputeAuxData(HistoryTree *h,HistoryTree **finalLeaf){
     FreeAuxData();
     aux=NewVector(8);
     ComputeAuxDataWidth(h);
     ComputeAuxDataCoordinates(0,0,-1.0f,-1.0f,1.0f,1.0f);
     ComputeAuxDataRedEdges();
-    ComputeAuxDataAnonymities();
+    ComputeAuxDataAnonymities(finalLeaf);
     ResetAuxDataVariables();
 }
 
@@ -159,9 +159,8 @@ void ComputeAuxData(HistoryTree *h){
      - Red-edge computation runs only for the new level: O(n×obs) instead of O(R×n×obs)
      - Width, coordinate, and anonymity passes still touch all levels: O(R×n) unavoidably
 */
-void AppendAuxDataOneLevel(void){
+void AppendAuxDataOneLevel(HistoryTree **finalLeaf){
     if(!aux)return; /* fall-through guard; caller should use ComputeAuxData instead */
-    SetWindowContext(win1);
     int old_depth=aux->tot;    /* number of AuxData levels before this call */
     int new_level=old_depth;   /* index of the level we are about to add */
     AddVector(aux,NewVector(8));
@@ -249,17 +248,20 @@ void AppendAuxDataOneLevel(void){
         Vector *v=GetLevel(i);
         for(int j=0;j<v->tot;j++)((AuxData*)v->items[j])->anonymity=0;
     }
-    ComputeAuxDataAnonymities();
+    ComputeAuxDataAnonymities(finalLeaf);
 
     /* Reset algorithm state for all nodes (same behaviour as full ComputeAuxData). */
     ResetAuxDataVariables();
 }
 
 /* Remove the deepest AuxData level (inverse of AppendAuxDataOneLevel).
-   Used after tail rollback or before suffix replay to drop stale levels. */
+   Used after tail rollback or before suffix replay to drop stale levels.
+   NOTE: this always reads Entity->finalLeaf directly (passes NULL to
+   ComputeAuxDataAnonymities), matching the original single-threaded call order where
+   RollBackLastRound() trims aux levels *before* ReassignEntityFinalLeaves() has run --
+   Entity->finalLeaf still holds its pre-rollback value at this point, exactly as before. */
 void TrimAuxDataOneLevel(void){
     if(!aux || aux->tot<=1)return;
-    SetWindowContext(win1);
     int last=aux->tot-1;
     if(last>0){
         Vector *prev=GetLevel(last-1);
@@ -295,13 +297,12 @@ void TrimAuxDataOneLevel(void){
         Vector *v=GetLevel(i);
         for(int j=0;j<v->tot;j++)((AuxData*)v->items[j])->anonymity=0;
     }
-    ComputeAuxDataAnonymities();
+    ComputeAuxDataAnonymities(NULL);
     ResetAuxDataVariables();
 }
 
 void FreeAuxData(void){
     if(!aux)return;
-    SetWindowContext(win1);
     for(int i=0;i<aux->tot;i++){
         Vector *v=GetLevel(i);
         for(int j=0;j<v->tot;j++){

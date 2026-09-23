@@ -137,6 +137,24 @@ function waitForAnimationFrame() {
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
+// True while the backend's background compute worker thread is still processing a previous
+// recompute (see src/compute_job.c). Edits attempted while this is true are silently rejected by
+// the C side (CanMutateNetwork() in events.c), so the auto-repeat loop below must wait for this
+// to clear before firing the next repeat -- otherwise it fires anyway, the edit is rejected, the
+// round count never changes, and waitForToolbarRoundChange() below would wait in vain and give
+// up on the whole press-and-hold gesture even though the button is still held.
+function isComputeJobBusy() {
+    return typeof Module._IsComputeJobBusy === 'function' && !!Module._IsComputeJobBusy();
+}
+
+// Polls once per animation frame until the backend is idle, or `isStillHeld` becomes false (the
+// button was released / a new press-and-hold gesture started in the meantime).
+async function waitWhileComputeJobBusy(isStillHeld) {
+    while (isStillHeld() && isComputeJobBusy()) {
+        await waitForAnimationFrame();
+    }
+}
+
 async function waitForToolbarRoundChange(readState, previousState, timeoutMs = 2000) {
     const deadline = performance.now() + timeoutMs;
     while (performance.now() < deadline) {
@@ -166,7 +184,15 @@ function bindToolbarKeyButton(id, key, code, opts = {}) {
     }
 
     async function triggerUntilReleased(pointerId, generation) {
-        while (activePointerId === pointerId && repeatGeneration === generation) {
+        const isStillHeld = () => activePointerId === pointerId && repeatGeneration === generation;
+        while (isStillHeld()) {
+            if (readRepeatState) {
+                // Wait for any in-flight background recompute to finish before firing the next
+                // repeat, so this press is guaranteed to be accepted rather than silently
+                // rejected while busy (see isComputeJobBusy() above).
+                await waitWhileComputeJobBusy(isStillHeld);
+                if (!isStillHeld()) break;
+            }
             const beforeState = readRepeatState ? readRepeatState() : null;
             trigger();
             repeated = true;

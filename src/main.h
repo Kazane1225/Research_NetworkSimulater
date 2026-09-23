@@ -70,6 +70,7 @@
 #include "auxdata.h"
 #include "stabilizing_algo.h"
 #include "terminating_algo.h"
+#include "compute_job.h"
 #include "render.h"
 #include "events.h"
 

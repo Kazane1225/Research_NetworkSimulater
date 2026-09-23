@@ -5,7 +5,7 @@
 
 Network *network=NULL;
 int currentRound=-1;
-HistoryTree *finalHistory=NULL;
+_Thread_local HistoryTree *finalHistory=NULL;
 int selectedEntity=-1;
 int selectedNodeI=-1,selectedNodeJ=-1;
 bool drawingEdge=false;
@@ -125,7 +125,7 @@ void InitNetwork(int type,int n){
         default: break;
     }
     if(network->rounds->tot)currentRound=0;
-    ExecuteNetwork();
+    ComputeJob_DispatchExecuteNetwork(NULL,NULL,false);
     win1->invalid=true;
 }
 
@@ -172,10 +172,10 @@ static void FreeEntitySnap(Entity *e){
     }
 }
 
-static void RebuildFinalHistory(void);
+static void RebuildFinalHistory(HistoryTree **outFinalLeaf);
 static void TakeSnapshotsBeforeRound(void);
-static void InitFinalHistoryFromEntities(void);
-static void ExecuteRoundIncremental(int r);
+static void InitFinalHistoryFromEntities(HistoryTree **outFinalLeaf);
+static void ExecuteRoundIncremental(int r,HistoryTree **outFinalLeaf);
 
 typedef struct{HistoryTree *target;int mult;}RedInfo;
 static int cmp_redinfo(const void *a,const void *b){
@@ -183,7 +183,10 @@ static int cmp_redinfo(const void *a,const void *b){
     uintptr_t pb=(uintptr_t)((const RedInfo *)b)->target;
     return (pa>pb)-(pa<pb);
 }
-static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int *counts){
+// Writes into outFinalLeaf[i] instead of Entity->finalLeaf directly: this runs on the compute
+// worker thread, and Entity->finalLeaf is read concurrently by the main (render) thread, so it
+// must only be updated once the whole job's result is committed on the main thread.
+static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int *counts,HistoryTree **outFinalLeaf){
     int n=network->entities->tot;
     for(int i=0;i<n;i++){
         Entity *e=GetEntity(i);
@@ -206,19 +209,19 @@ static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int 
             for(int k=0;k<nc;k++)
                 AddRedEdge(node,infos[i][k].target,infos[i][k].mult);
         }
-        e->finalLeaf=node;
+        outFinalLeaf[i]=node;
     }
 }
 
-static void InitFinalHistoryFromEntities(void){
+static void InitFinalHistoryFromEntities(HistoryTree **outFinalLeaf){
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
     double t0=PerfNowMs();
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
-        e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
+        outFinalLeaf[i]=MergeHistoryTrees(finalHistory,e->history,NULL);
     }
-    ComputeAuxData(finalHistory);
+    ComputeAuxData(finalHistory,outFinalLeaf);
     double elapsed=PerfNowMs()-t0;
     lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
 }
@@ -253,21 +256,21 @@ static void FreeMailboxRedInfo(RedInfo **infos,int *counts,int n){
     free(counts);
 }
 
-static void ExecuteRoundIncremental(int r){
+static void ExecuteRoundIncremental(int r,HistoryTree **outFinalLeaf){
     int n=network->entities->tot;
     int R=network->rounds->tot;
     if(r==R-1)TakeSnapshotsBeforeRound();
     SetHistoryTreeMutationRound(r+1);
     HistoryTree **prevFL=malloc((size_t)n*sizeof(HistoryTree*));
-    for(int i=0;i<n;i++)prevFL[i]=GetEntity(i)->finalLeaf;
+    for(int i=0;i<n;i++)prevFL[i]=GetEntity(i)->finalLeaf; // reads the previous job's committed value
     Vector *v=network->rounds->items[r];
     for(int i=0;i<v->tot;i++)ExecuteInteraction(v->items[i]);
     RedInfo **infos;
     int *counts;
     CollectMailboxRedInfo(n,&infos,&counts);
     for(int i=0;i<n;i++)EndRound(GetEntity(i));
-    ExtendFinalHistoryOneLevel(prevFL,infos,counts);
-    AppendAuxDataOneLevel();
+    ExtendFinalHistoryOneLevel(prevFL,infos,counts,outFinalLeaf);
+    AppendAuxDataOneLevel(outFinalLeaf);
     FreeMailboxRedInfo(infos,counts,n);
     free(prevFL);
 }
@@ -289,7 +292,7 @@ static HistoryTree *FindMatchingFinalLeaf(HistoryTree *entityHist){
     return best;
 }
 
-static void ReassignEntityFinalLeaves(void){
+static void ReassignEntityFinalLeaves(HistoryTree **outFinalLeaf){
     int n=network->entities->tot;
     for(int i=0;i<n;i++)ComputeHashBottomUp(GetEntity(i)->history);
     for(int i=0;i<n;i++){
@@ -298,11 +301,11 @@ static void ReassignEntityFinalLeaves(void){
         unsigned long long h=e->history->hash;
         for(int j=0;j<i;j++){
             if(GetEntity(j)->history->hash==h&&HistoryTreeEquals(GetEntity(j)->history,e->history)){
-                leaf=GetEntity(j)->finalLeaf;break;
+                leaf=outFinalLeaf[j];break; // freshly computed earlier in this same loop
             }
         }
         if(!leaf)leaf=FindMatchingFinalLeaf(e->history);
-        e->finalLeaf=leaf;
+        outFinalLeaf[i]=leaf;
     }
 }
 
@@ -313,16 +316,16 @@ static void TrimSimulationViewsToPrefix(int prefixRounds){
     while(aux&&aux->tot>target)TrimAuxDataOneLevel();
 }
 
-static bool TryRestorePrefixViews(int prefixRounds){
+static bool TryRestorePrefixViews(HistoryTree **outFinalLeaf,int prefixRounds){
     if(!finalHistory||!aux||prefixRounds<0)return false;
     TrimSimulationViewsToPrefix(prefixRounds);
-    ReassignEntityFinalLeaves();
+    ReassignEntityFinalLeaves(outFinalLeaf);
     for(int i=0;i<network->entities->tot;i++)
-        if(!GetEntity(i)->finalLeaf)return false;
+        if(!outFinalLeaf[i])return false;
     return true;
 }
 
-static void RebuildFinalHistory(void){
+static void RebuildFinalHistory(HistoryTree **outFinalLeaf){
     double t0=PerfNowMs();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
@@ -340,12 +343,12 @@ static void RebuildFinalHistory(void){
         unsigned long long h=e->history->hash;
         for(int j=0;j<i;j++){
             if(GetEntity(j)->history->hash==h && HistoryTreeEquals(GetEntity(j)->history,e->history)){
-                leaf=GetEntity(j)->finalLeaf;break;
+                leaf=outFinalLeaf[j];break; // freshly computed earlier in this same loop
             }
         }
-        e->finalLeaf=leaf?leaf:MergeHistoryTrees(finalHistory,e->history,NULL);
+        outFinalLeaf[i]=leaf?leaf:MergeHistoryTrees(finalHistory,e->history,NULL);
     }
-    ComputeAuxData(finalHistory);
+    ComputeAuxData(finalHistory,outFinalLeaf);
     double elapsed=PerfNowMs()-t0;
     lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
 }
@@ -399,31 +402,31 @@ static bool SnapshotsValid(void){
 /* Re-execute only the last round using saved snapshots.
    Restores pre-last-round state (keeping snap valid), replays last round, rebuilds finalHistory.
    Falls back to full ExecuteNetwork() when snapshots are unavailable. */
-void ReExecuteLastRound(void){
-    if(!SnapshotsValid()){ExecuteNetwork();return;}
+void ReExecuteLastRound(HistoryTree **outFinalLeaf){
+    if(!SnapshotsValid()){ExecuteNetwork(outFinalLeaf);return;}
     RestoreFromSnapshotsCopy();
-    ExecuteRoundIncremental(network->rounds->tot-1);
+    ExecuteRoundIncremental(network->rounds->tot-1,outFinalLeaf);
 }
 
 /* Roll back the last round: entity states revert to pre-last-round snapshots.
    Called after DeleteRound(last) when the last round was removed. */
-void RollBackLastRound(void){
-    if(!SnapshotsValid()){ExecuteNetwork();return;}
+void RollBackLastRound(HistoryTree **outFinalLeaf){
+    if(!SnapshotsValid()){ExecuteNetwork(outFinalLeaf);return;}
     RestoreFromSnapshots();
-    if(!TryRestorePrefixViews(network->rounds->tot))
-        RebuildFinalHistory();
+    if(!TryRestorePrefixViews(outFinalLeaf,network->rounds->tot))
+        RebuildFinalHistory(outFinalLeaf);
 }
 
 /* Append the newly added last round on top of the current (already up-to-date) entity states.
    Called after InsertRound() appended a round at the end. */
-void AppendLastRound(void){
+void AppendLastRound(HistoryTree **outFinalLeaf){
     double totalStart=PerfNowMs();
-    ExecuteRoundIncremental(network->rounds->tot-1);
+    ExecuteRoundIncremental(network->rounds->tot-1,outFinalLeaf);
     double afterAux=PerfNowMs();
     RecordAppendPerf(0.0,afterAux-totalStart,0.0,0.0,afterAux-totalStart);
 }
 
-void ExecuteNetwork(void){
+void ExecuteNetwork(HistoryTree **outFinalLeaf){
     SetHistoryTreeMutationRound(0);
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
@@ -443,10 +446,13 @@ void ExecuteNetwork(void){
         for(int i=0;i<network->entities->tot;i++)
             EndRound(GetEntity(i));
     }
-    InitFinalHistoryFromEntities();
+    InitFinalHistoryFromEntities(outFinalLeaf);
 }
 
 void DoneNetwork(void){
+    // `network` is about to be freed below; make sure no worker job is still reading/writing
+    // it (or its entities' compute-scratch fields) before doing so.
+    ComputeJob_WaitForIdle();
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NULL;
@@ -569,6 +575,10 @@ static bool LoadNetworkHelper(SDL_IOStream *stream){
     float x,y;
     size_t length=0,readBytes=0;
     char ch;
+    // The global `network` pointer below is about to be swapped to a brand new (empty, then
+    // progressively filled) object. Make sure no worker job is still reading/writing the
+    // current one first.
+    ComputeJob_WaitForIdle();
     Network *backup=network;
     network=malloc(sizeof(Network));
     network->entities=NewVector(8);
@@ -629,7 +639,7 @@ static bool LoadNetworkHelper(SDL_IOStream *stream){
     network=backup;
     DoneNetwork();
     network=temp;
-    ExecuteNetwork();
+    ComputeJob_DispatchExecuteNetwork(NULL,NULL,false);
     win1->invalid=true;
     return true;
 }
@@ -996,7 +1006,7 @@ EMSCRIPTEN_KEEPALIVE void TutorialLoadNetwork(void){
     AddDoubleInteraction(4,3,5,1);
     AddDoubleInteraction(4,4,5,1);
     currentRound=0;
-    ExecuteNetwork();
+    ComputeJob_DispatchExecuteNetwork(NULL,NULL,false);
     win1->invalid=true;
 }
 

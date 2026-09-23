@@ -20,9 +20,13 @@ if not exist website mkdir website
 del /f /q "website\index.js" "website\index.data" "website\index.wasm" 2>nul
 
 rem Build (output goes to website\index.js/.wasm/.data)
+rem -pthread / -s USE_PTHREADS=1 enable the real compute worker thread (src\compute_job.c);
+rem this requires the page to be served cross-origin-isolated (COOP/COEP), which
+rem scripts\serve.js already sets.
 call emcc ^
-  src\main.c src\queue.c src\vector.c src\buffer.c src\shader.c src\font.c src\text.c src\graphics.c src\history_tree.c src\entity.c src\examples.c src\network.c src\auxdata.c src\stabilizing_algo.c src\terminating_algo.c src\render.c src\events.c ^
+  src\main.c src\queue.c src\vector.c src\buffer.c src\shader.c src\font.c src\text.c src\graphics.c src\history_tree.c src\entity.c src\examples.c src\network.c src\auxdata.c src\stabilizing_algo.c src\terminating_algo.c src\compute_job.c src\render.c src\events.c ^
   -O2 ^
+  -pthread -s PTHREAD_POOL_SIZE=1 ^
   -s MIN_WEBGL_VERSION=2 -s MAX_WEBGL_VERSION=2 ^
   -s ALLOW_MEMORY_GROWTH=1 -s MAXIMUM_MEMORY=256mb ^
   --preload-file assets\font.fon@/font.fon --preload-file assets\font.tga@/font.tga ^
