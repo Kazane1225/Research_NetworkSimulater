@@ -1,0 +1,66 @@
+name: Deploy website to GitHub Pages
+
+# Combined deploy: publishes all three branches' website/ side by side under one Pages site,
+# so pushing to any of them always redeploys all three (no more overwrite-the-others).
+on:
+  push:
+    branches:
+      - cursor/multi-thread-260e
+      - cursor/full-multithread-260e
+      - feature/improve_algorithm
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history, all branches reachable)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Assemble combined site (pseudo + full-thread + no-thread side by side)
+        run: |
+          set -e
+          mkdir -p dist/pseudo dist/full-thread dist/no-thread
+          git archive origin/cursor/multi-thread-260e -- website | tar -x --strip-components=1 -C dist/pseudo
+          git archive origin/cursor/full-multithread-260e -- website | tar -x --strip-components=1 -C dist/full-thread
+          git archive origin/feature/improve_algorithm -- website | tar -x --strip-components=1 -C dist/no-thread
+          cat > dist/index.html <<'EOF'
+          <!doctype html>
+          <html lang="ja">
+          <head><meta charset="utf-8"><title>Network Simulator demos</title></head>
+          <body>
+            <h1>Network Simulator demos</h1>
+            <ul>
+              <li><a href="pseudo/">Pseudo multi-thread (cursor/multi-thread-260e)</a></li>
+              <li><a href="full-thread/">Full multi-thread (cursor/full-multithread-260e)</a></li>
+              <li><a href="no-thread/">No multi-thread baseline (feature/improve_algorithm)</a></li>
+            </ul>
+          </body>
+          </html>
+          EOF
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
