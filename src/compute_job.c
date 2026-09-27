@@ -91,6 +91,12 @@ EMSCRIPTEN_KEEPALIVE int IsComputeJobBusy(void){
     return ComputeJob_IsActive()?1:0;
 }
 
+// Wall-clock milliseconds since the active job was dispatched; 0 when idle.
+// The page hourglass uses this so the elapsed time matches the worker, not the poll interval.
+EMSCRIPTEN_KEEPALIVE double GetComputeJobElapsedMs(void){
+    return ComputeJob_ElapsedMs();
+}
+
 void ComputeJob_WaitForIdle(void){
     pthread_mutex_lock(&jobMutex);
     while(state==CJ_DISPATCHED||state==CJ_RUNNING)pthread_cond_wait(&jobCond,&jobMutex);

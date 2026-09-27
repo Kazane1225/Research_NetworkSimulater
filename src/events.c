@@ -57,14 +57,10 @@ void FlushEvents(void){
 
 // Interactive edits must not mutate `network` (or call the synchronous incremental recompute
 // functions, which touch the same entity fields the compute worker thread may still be using)
-// while a job is in flight. Callers check this first and skip the whole edit if busy, showing an
-// explicit message so the user knows why nothing happened, instead of silently ignoring input.
+// while a job is in flight. Callers check this first and skip the whole edit if busy. The
+// hourglass overlay in the page (see website/js/ui.js) is the busy indicator.
 static bool CanMutateNetwork(void){
-    if(ComputeJob_IsActive()){
-        DisplayMessage("Still computing the previous change, please wait...");
-        return false;
-    }
-    return true;
+    return !ComputeJob_IsActive();
 }
 
 // Runs as a ComputeJob completion callback: re-selects the history-tree node corresponding to

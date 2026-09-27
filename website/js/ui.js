@@ -147,6 +147,48 @@ function isComputeJobBusy() {
     return typeof Module._IsComputeJobBusy === 'function' && !!Module._IsComputeJobBusy();
 }
 
+// Hourglass at the top centre of the canvas while a background recompute is running.
+// Replaces the old canvas text ("COMPUTING..." / "please wait").
+const computeIndicator = document.getElementById('compute-indicator');
+const computeElapsedEl = document.getElementById('compute-elapsed');
+let computeHideTimer = null;
+const COMPUTE_SHOW_AFTER_MS = 150;
+const COMPUTE_MIN_VISIBLE_MS = 480;
+let computeShownAt = 0;
+
+function syncComputeIndicator() {
+    if (!computeIndicator) return;
+    const busy = isComputeJobBusy();
+    if (busy) {
+        const elapsedMs = typeof Module._GetComputeJobElapsedMs === 'function'
+            ? Module._GetComputeJobElapsedMs()
+            : 0;
+        if (elapsedMs < COMPUTE_SHOW_AFTER_MS) return;
+        if (computeHideTimer) {
+            clearTimeout(computeHideTimer);
+            computeHideTimer = null;
+        }
+        if (!computeIndicator.classList.contains('visible')) {
+            computeShownAt = performance.now();
+            const label = getLocale().ui.computing;
+            if (label) computeIndicator.setAttribute('aria-label', label);
+        }
+        computeIndicator.classList.add('visible');
+        computeIndicator.setAttribute('aria-hidden', 'false');
+        computeElapsedEl.textContent = (elapsedMs / 1000).toFixed(1) + 's';
+    } else if (computeIndicator.classList.contains('visible') && !computeHideTimer) {
+        const remain = Math.max(0, COMPUTE_MIN_VISIBLE_MS - (performance.now() - computeShownAt));
+        computeHideTimer = setTimeout(() => {
+            computeHideTimer = null;
+            if (!isComputeJobBusy()) {
+                computeIndicator.classList.remove('visible');
+                computeIndicator.setAttribute('aria-hidden', 'true');
+            }
+        }, remain);
+    }
+}
+setInterval(syncComputeIndicator, 100);
+
 // Polls once per animation frame until the backend is idle, or `isStillHeld` becomes false (the
 // button was released / a new press-and-hold gesture started in the meantime).
 async function waitWhileComputeJobBusy(isStillHeld) {
