@@ -397,6 +397,52 @@ function updateNetStats() {
 
 setInterval(updateNetStats, 400);
 
+// Hourglass at the top centre of the canvas while a chunked recompute is in progress
+// (see src/compute_job.c). Replaces the old canvas text "Computing...".
+const computeIndicator = document.getElementById('compute-indicator');
+const computeElapsedEl = document.getElementById('compute-elapsed');
+let computeHideTimer = null;
+const COMPUTE_SHOW_AFTER_MS = 150;
+const COMPUTE_MIN_VISIBLE_MS = 480;
+let computeShownAt = 0;
+
+function isComputeJobBusy() {
+    return typeof Module._IsComputeJobBusy === 'function' && !!Module._IsComputeJobBusy();
+}
+
+function syncComputeIndicator() {
+    if (!computeIndicator) return;
+    const busy = isComputeJobBusy();
+    if (busy) {
+        const elapsedMs = typeof Module._GetComputeJobElapsedMs === 'function'
+            ? Module._GetComputeJobElapsedMs()
+            : 0;
+        if (elapsedMs < COMPUTE_SHOW_AFTER_MS) return;
+        if (computeHideTimer) {
+            clearTimeout(computeHideTimer);
+            computeHideTimer = null;
+        }
+        if (!computeIndicator.classList.contains('visible')) {
+            computeShownAt = performance.now();
+            const label = getLocale().ui.computing;
+            if (label) computeIndicator.setAttribute('aria-label', label);
+        }
+        computeIndicator.classList.add('visible');
+        computeIndicator.setAttribute('aria-hidden', 'false');
+        computeElapsedEl.textContent = (elapsedMs / 1000).toFixed(1) + 's';
+    } else if (computeIndicator.classList.contains('visible') && !computeHideTimer) {
+        const remain = Math.max(0, COMPUTE_MIN_VISIBLE_MS - (performance.now() - computeShownAt));
+        computeHideTimer = setTimeout(() => {
+            computeHideTimer = null;
+            if (!isComputeJobBusy()) {
+                computeIndicator.classList.remove('visible');
+                computeIndicator.setAttribute('aria-hidden', 'true');
+            }
+        }, remain);
+    }
+}
+setInterval(syncComputeIndicator, 100);
+
 // ── UI Tour (existing tutorial) ─────────────────────────
 const TUTORIAL_STEPS = [
     {

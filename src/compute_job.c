@@ -62,6 +62,17 @@ double ComputeJob_ElapsedMs(void){
     return phase==CJ_IDLE?0.0:PerfNowMs()-jobStartMs;
 }
 
+#ifdef __EMSCRIPTEN__
+// Polled by the page hourglass (website/js/ui.js). The canvas used to draw "Computing..." itself.
+EMSCRIPTEN_KEEPALIVE int IsComputeJobBusy(void){
+    return ComputeJob_IsActive()?1:0;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetComputeJobElapsedMs(void){
+    return ComputeJob_ElapsedMs();
+}
+#endif
+
 void ComputeJob_CancelActive(void){
     DiscardActiveJob();
     pendingOnComplete=NULL;
