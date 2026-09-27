@@ -109,12 +109,14 @@ static void InitSystem(void){
 
 static void MainLoop(void){
     Update();
+    ComputeJob_Step();
     RenderWindow(win1);
 }
 
 int main(int argc,char **argv){
     (void)argc; (void)argv;
     InitSystem();
+    ComputeJob_Init();
     Uint64 time;
     SDL_GetCurrentTime((SDL_Time*)&time);
     SDL_srand(time);

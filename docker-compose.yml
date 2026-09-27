@@ -3,7 +3,6 @@ services:
     build: .
     volumes:
       - .:/project
-      - ${SDL3_PREFIX}:/sdl3prefix:ro
 
   serve:
     image: node:lts-alpine

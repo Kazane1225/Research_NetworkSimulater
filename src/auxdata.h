@@ -18,14 +18,19 @@ typedef struct{ // inherits the structure of a history tree and adds more data t
     bool guesser; // this node and all its visible children are counted (only used by the terminating algorithm)
 }AuxData;
 
-extern Vector *aux; // Vector of Vector of AuxData
-extern AuxData *selectedNode;
+extern _Thread_local Vector *aux; // Vector of Vector of AuxData; thread-local so the compute worker
+                                  // thread can build a new tree without disturbing the copy the main
+                                  // (render/input) thread is currently reading
+extern AuxData *selectedNode; // only ever touched on the main thread (set by SelectView/CountingAlgorithm)
 
 Vector *GetLevel(int i);
 AuxData *GetAuxData(int i,int j);
 void ResetAuxDataVariables(void);
-void ComputeAuxData(HistoryTree *h);
-void AppendAuxDataOneLevel(void);
+// finalLeaf (may be NULL): fresh per-entity Entity->finalLeaf values, indexed like network->entities,
+// used to compute anonymity counts. Pass NULL to fall back to reading Entity->finalLeaf directly
+// (only correct when that field is already known-valid at the call site; see auxdata.c).
+void ComputeAuxData(HistoryTree *h,HistoryTree **finalLeaf);
+void AppendAuxDataOneLevel(HistoryTree **finalLeaf);
 void TrimAuxDataOneLevel(void);
 void FreeAuxData(void);
 void SelectView(void);

@@ -40,6 +40,10 @@
 			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/buffer.h" />
+		<Unit filename="src/compute_job.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/compute_job.h" />
 		<Unit filename="src/entity.c">
 			<Option compilerVar="CC" />
 		</Unit>

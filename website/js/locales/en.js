@@ -128,6 +128,7 @@ const LOCALE_EN = {
         guidedDone:  '\u2713 Done',
         // Misc messages
         wasmNotReady: 'WASM not yet ready \u2014 please wait a moment and try again.',
+        computing: 'Computing',
         // Help modal
         helpTitle: 'Anonymous Dynamic Networks \u2014 Controls',
         helpClose: '\u2715 Close',

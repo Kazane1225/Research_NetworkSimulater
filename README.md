@@ -21,8 +21,17 @@ Then open **http://localhost:8000/** in your browser.
 | Tool | Purpose |
 |------|---------|
 | [Emscripten](https://emscripten.org/) | Compile C sources to WebAssembly |
-| SDL3 libraries | Expected at `C:\Emscripten\libs\sdl3minimal\prefix` |
+| SDL3 libraries | Expected at `C:\Emscripten\libs\sdl3minimal\prefix`, **built with `-pthread`** (see note below) |
 | [Node.js](https://nodejs.org/) | Run the local development server |
+
+> **Note:** the app uses a background compute worker thread (`src/compute_job.c`), which requires
+> every linked object -- including SDL3 itself -- to be built with pthread/atomics support. If
+> your existing local SDL3 prefix predates this and `build.bat` fails at the link step with an
+> error like `--shared-memory is disallowed by SDL_atomic.c.o because it was not compiled with
+> 'atomics' or 'bulk-memory' features`, rebuild SDL3 for Emscripten with `-pthread` added to
+> `CMAKE_C_FLAGS` (e.g. `emcmake cmake -DCMAKE_C_FLAGS=-pthread ...`) and reinstall it at the same
+> prefix path. The Docker workflow below does not need this -- it builds its own pthread-enabled
+> SDL3 automatically.
 
 ---
 
@@ -60,15 +69,7 @@ serve.bat
 
 ## Building and Serving with Docker
 
-A Docker Compose setup is provided for building and running the simulator without installing Emscripten or SDL3 locally. All you need is Docker Desktop.
-
-### Configure the SDL3 path
-
-On first use, check the `.env` file in the project root and adjust the SDL3 prefix path if needed:
-
-```
-SDL3_PREFIX=C:/Emscripten/libs/sdl3minimal/prefix
-```
+A Docker Compose setup is provided for building and running the simulator without installing Emscripten or SDL3 locally. All you need is Docker Desktop. The `build` image builds its own SDL3 (with pthread support, required by the background compute worker thread) the first time it runs, so no host-side SDL3 setup or `.env`/`SDL3_PREFIX` configuration is needed for the Docker workflow.
 
 ### Build only
 
