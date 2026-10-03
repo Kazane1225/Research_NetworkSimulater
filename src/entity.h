@@ -1,4 +1,10 @@
 typedef struct{
+    HistoryTree *history; // copy of entity's history before last round was applied
+    HistoryTree *current; // copy of entity's current node (pointer into history copy)
+    int outdegree;
+}EntitySnapshot;
+
+typedef struct{
     int input; // 0: leader
     HistoryTree *history; // view of the history tree
     HistoryTree *current; // current node of the history tree (i.e., deepest node)
@@ -6,6 +12,7 @@ typedef struct{
     int outdegree; // messages sent in previous round; -1 if not outAware
     float x,y; // used for drawing
     HistoryTree *finalLeaf; // leaf in the final history tree representing entity
+    EntitySnapshot *snap; // snapshot before last round was applied; NULL if invalid
 }Entity;
 
 extern bool outAware;

@@ -10,11 +10,13 @@ Entity *NewEntity(int input,float x,float y){
     e->outdegree=outAware?0:-1;
     e->x=x;
     e->y=y;
+    e->snap=NULL;
     return e;
 }
 
 void FreeEntity(Entity *e){ // assumes mailbox to be empty
     FreeHistoryTree(e->history);
+    if(e->snap){FreeHistoryTree(e->snap->history);free(e->snap);}
     FreeVector(e->mailbox);
     free(e);
 }
@@ -44,7 +46,9 @@ void EndRound(Entity *e){
 
 void SendHistory(Entity *e1,Entity *e2,int multiplicity){ // sends the history from e1 to e2
     HistoryTree *h=CopyHistoryTree(e1->history,NULL);
-    AddVector(e2->mailbox,NewObservation(h,multiplicity));
+    Observation *obs=NewObservation(h,multiplicity);
+    obs->finalLeafAtSend=e1->finalLeaf; // record sender's finalHistory position for incremental update
+    AddVector(e2->mailbox,obs);
     if(outAware)e1->outdegree+=multiplicity;
 }
 

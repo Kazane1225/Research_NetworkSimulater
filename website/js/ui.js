@@ -47,7 +47,37 @@ var Module = {
     onAbort:  msg => _showError(`WASM Abort:\n${msg}`),
     onExit:   code => { if (code !== 0) _showError(`WASM terminated (exit code ${code})\nCheck the browser console (F12) for SDL / WebGL errors from [wasm]`); },
     printErr: msg => { console.error('[wasm]', msg); },
+    onRuntimeInitialized: () => {
+        if (typeof syncThemeToWasm === 'function') syncThemeToWasm();
+    },
 };
+
+// ── Action feedback toast (called from C via DisplayMessage) ──
+const appToast     = document.getElementById('app-toast');
+const appToastText = appToast.querySelector('.app-toast-text');
+let appToastTimer  = null;
+
+function translateAppMessage(msg) {
+    const M = getLocale().messages || {};
+    if (M[msg] !== undefined) return M[msg];
+    const step = /^Execute step (\d+)$/.exec(msg);
+    if (step && M.executeStep) return M.executeStep(step[1]);
+    return msg;
+}
+
+function showAppMessage(msg) {
+    appToastText.textContent = translateAppMessage(msg);
+    appToast.classList.toggle('error', /^(Cannot|Failed)/.test(msg));
+    if (appToast.classList.contains('visible')) {
+        appToast.classList.remove('bump');
+        void appToast.offsetWidth;
+        appToast.classList.add('bump');
+    } else {
+        appToast.classList.add('visible');
+    }
+    clearTimeout(appToastTimer);
+    appToastTimer = setTimeout(() => appToast.classList.remove('visible', 'bump'), 2400);
+}
 
 // ── Synthetic keyboard dispatch ───────────────────────────────
 // Emscripten registers its listener on window (capture phase).
@@ -241,7 +271,25 @@ bindToolbarKeyButton('btn-clear-round', 'Backspace', 'Backspace');
 bindToolbarKeyButton('btn-step', ' ', 'Space');
 bindToolbarKeyButton('btn-delete-agent', 'Delete', 'Delete');
 bindToolbarKeyButton('btn-deselect', 'Escape', 'Escape');
+bindToolbarKeyButton('btn-tree-zoom-in', 'z', 'KeyZ', { repeat: true });
+bindToolbarKeyButton('btn-tree-zoom-out', 'x', 'KeyX', { repeat: true });
+bindToolbarKeyButton('btn-tree-fit', 'f', 'KeyF');
 bindToolbarKeyButton('btn-load', 'l', 'KeyL');
+
+// Ctrl+wheel and trackpad pinch (reported as ctrlKey wheel) zoom the history tree
+// instead of the page. Runs in the capture phase so SDL never sees the event.
+window.addEventListener('wheel', e => {
+    if (!e.ctrlKey || e.target !== canvas || typeof Module._TreeZoomAt !== 'function') return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * canvas.width / rect.width;
+    const y = (e.clientY - rect.top) * canvas.height / rect.height;
+    const unit = e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 1 : 0.0025;
+    const factor = Math.min(2, Math.max(0.5, Math.exp(-e.deltaY * unit)));
+    if (Module._TreeZoomAt(factor, x, y)) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+}, { capture: true, passive: false });
 bindToolbarKeyButton('btn-save', 's', 'KeyS');
 
 // ── Options popover ───────────────────────────────────────────
@@ -331,12 +379,35 @@ window.addEventListener('keydown', e => {
     }
 }, true);
 // ── Network stats panel ───────────────────────────────
+const netStatsPanel = document.getElementById('net-stats');
+const netStatsShow  = document.getElementById('net-stats-show');
+const netStatsToggle = document.getElementById('opt-net-stats-toggle');
 const statAgents  = document.getElementById('stat-agents');
 const statLeaders = document.getElementById('stat-leaders');
 const statRounds  = document.getElementById('stat-rounds');
 const statLinks   = document.getElementById('stat-links');
 const statClasses = document.getElementById('stat-classes');
 const statUnique  = document.getElementById('stat-unique');
+
+function setNetStatsVisible(visible) {
+    netStatsPanel.classList.toggle('hidden', !visible);
+    netStatsShow.classList.toggle('visible', !visible);
+    netStatsToggle.classList.toggle('on', visible);
+    try { localStorage.setItem('netStatsVisible', visible ? '1' : '0'); } catch (_) {}
+}
+
+document.getElementById('net-stats-close').addEventListener('click', () => setNetStatsVisible(false));
+netStatsShow.addEventListener('click', () => setNetStatsVisible(true));
+document.getElementById('opt-net-stats').addEventListener('click', () => {
+    setNetStatsVisible(netStatsPanel.classList.contains('hidden'));
+});
+
+// Restore preference (default: visible)
+try {
+    setNetStatsVisible(localStorage.getItem('netStatsVisible') !== '0');
+} catch (_) {
+    setNetStatsVisible(true);
+}
 
 function updateNetStats() {
     if (typeof Module._GetNumAgents !== 'function') return;
@@ -833,6 +904,42 @@ function applyLocaleToDOM() {
         if (L[key] !== undefined) el.innerHTML = L[key];
     });
 }
+
+// ── Theme toggle ───────────────────────────────────────────────────
+const themeBtn = document.getElementById('btn-theme');
+
+function getTheme() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+}
+
+function syncThemeToWasm() {
+    if (typeof Module._SetUiTheme === 'function') {
+        Module._SetUiTheme(getTheme() === 'light' ? 1 : 0);
+    }
+}
+
+function syncThemeBtn() {
+    const light = getTheme() === 'light';
+    themeBtn.classList.toggle('active', light);
+    themeBtn.setAttribute('data-tip', light
+        ? 'Switch to dark theme / ダークモード'
+        : 'Switch to light theme / ライトモード');
+}
+
+function setTheme(theme) {
+    const next = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('theme', next); } catch (_) {}
+    syncThemeBtn();
+    syncThemeToWasm();
+}
+
+themeBtn.addEventListener('click', () => {
+    setTheme(getTheme() === 'light' ? 'dark' : 'light');
+});
+
+syncThemeBtn();
+syncThemeToWasm();
 
 // ── Language toggle ────────────────────────────────────────────────
 const langBtn = document.getElementById('btn-lang');

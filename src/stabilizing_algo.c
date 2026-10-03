@@ -62,7 +62,7 @@ bool StabilizingAlgorithm(void){ // stabilizes on correct output by round 2n-2
                     if(obs2!=node1->j)continue; // the observed node is not node1; skip it
                     mult2=child2->multiplicities->items[k]; // get multiplicity of child2's observation
                 }
-                if(!mult2)continue; // node1 and node2 do not form an exposed pair; skip node2
+                if(!mult2)continue; // no mutual red-edge observation at matching multiplicity; skip node2
                 int mult1=child1->multiplicities->items[j]; // get multiplicity of child1's observation
                 int guess=(node1->guess*mult1-1)/mult2+1; // guess node2's anonymity (make sure the guess is positive)
                 node2->guess=child2->guess=guess; // assign guess to node2 and its child

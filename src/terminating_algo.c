@@ -102,7 +102,7 @@ static bool LastAlgorithmStep(void){
     return true;
 }
 
-bool TerminatingAlgorithm(void){ // terminates with correct output by round 3n-3
+bool TerminatingAlgorithm(void){ // terminates with correct output by round 3n-2
     if(numSteps==0)return false;
     countSteps=0;
     int numLevels; // number of levels containing a visible leader node
