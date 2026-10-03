@@ -37,6 +37,9 @@
     --success-soft: rgba(63, 185, 80, 0.08);
     --success-border: rgba(63, 185, 80, 0.25);
     --warn: #ffa657;
+    --danger: #f85149;
+    --danger-soft: rgba(248, 81, 73, 0.20);
+    --danger-border: rgba(248, 81, 73, 0.55);
     --kbd-bg: #0d1117;
     --toggle-off: #30363d;
     --toggle-knob: #7d8590;
@@ -83,11 +86,14 @@
     --shadow: rgba(31, 35, 40, 0.14);
     --shadow-strong: rgba(31, 35, 40, 0.22);
     --shadow-glow: rgba(9, 105, 218, 0.22);
-    --label-overlay: rgba(31, 35, 40, 0.18);
+    --label-overlay: rgba(31, 35, 40, 0.45);
     --success: #1a7f37;
     --success-soft: rgba(26, 127, 55, 0.08);
     --success-border: rgba(26, 127, 55, 0.28);
     --warn: #9a6700;
+    --danger: #cf222e;
+    --danger-soft: rgba(207, 34, 46, 0.14);
+    --danger-border: rgba(207, 34, 46, 0.45);
     --kbd-bg: #f6f8fa;
     --toggle-off: #d0d7de;
     --toggle-knob: #8b949e;
@@ -587,6 +593,21 @@ canvas {
     flex-shrink: 0;
     box-shadow: 0 0 4px var(--leg-shadow);
 }
+[data-theme="light"] .leg-dot,
+[data-theme="light"] .swatch { box-shadow: 0 0 0 1px rgba(31, 35, 40, 0.45); }
+.swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 7px;
+    vertical-align: -1px;
+}
+.node-yellow { background: #e3b341; }
+.node-green  { background: #56d364; }
+.node-red    { background: #ff7070; }
+.node-cyan   { background: #39d8f5; }
+.node-orange { background: #ffa657; }
 .leg-tag {
     font-size: 10px;
     color: var(--text-faint);
@@ -1303,6 +1324,60 @@ body.modal-open { overflow: hidden; }
 #step-toast.visible {
     opacity: 1;
     transform: translateX(-50%) translateY(0);
+}
+
+/* ── Action feedback toast ───────────────────────────────── */
+#app-toast {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: min(560px, 80%);
+    padding: 7px 14px 7px 11px;
+    border-radius: 999px;
+    background: var(--panel-bg-solid);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 20px var(--shadow);
+    backdrop-filter: blur(6px);
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    transform: translate(-50%, -8px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+#app-toast.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+#app-toast.bump { animation: appToastBump 0.22s ease; }
+@keyframes appToastBump {
+    0%   { transform: translate(-50%, 0) scale(1); }
+    40%  { transform: translate(-50%, 0) scale(1.04); }
+    100% { transform: translate(-50%, 0) scale(1); }
+}
+.app-toast-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.app-toast-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft);
+}
+#app-toast.error { border-color: var(--danger-border); }
+#app-toast.error .app-toast-dot {
+    background: var(--danger);
+    box-shadow: 0 0 0 3px var(--danger-soft);
 }
 
 /* ── Language / theme toggle buttons ─────────────────────── */

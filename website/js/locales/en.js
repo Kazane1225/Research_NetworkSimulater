@@ -65,6 +65,7 @@ const LOCALE_EN = {
         tbRound:     'Round',
         tbAlgorithm: 'Algorithm',
         tbEdit:      'Edit',
+        tbView:      'Tree',
         // Algo buttons
         btnNone:        'None',
         btnStabilizing: 'Stabilizing',
@@ -140,6 +141,15 @@ const LOCALE_EN = {
 <tr><td>Left-click on agent / node</td><td>Select / deselect</td></tr>
 <tr><td>Mouse wheel</td><td>Change current round</td></tr>
 </table>
+<h3>Mouse \u2014 History Tree Panel</h3>
+<table>
+<tr><td>Drag on empty area</td><td>Scroll the history tree (right / middle drag also works)</td></tr>
+<tr><td>Ctrl + wheel  or  pinch</td><td>Zoom the history tree around the cursor</td></tr>
+<tr><td>Shift + wheel</td><td>Scroll the history tree horizontally</td></tr>
+<tr><td>Minimap (top-left)</td><td>Shown when the tree is larger than the panel; click or drag to jump</td></tr>
+<tr><td>Z / X</td><td>Zoom in / out</td></tr>
+<tr><td>F</td><td>Toggle: fit the whole tree \u2194 readable size (scrollable)</td></tr>
+</table>
 <h3>Modifiers while drawing or deleting a link</h3>
 <table>
 <tr><td>Ctrl  or  Q</td><td>Delete the link instead of creating it</td></tr>
@@ -170,11 +180,11 @@ const LOCALE_EN = {
 <tr><td>Space</td><td>Execute one algorithm step (select an agent or history node first)</td></tr>
 </table>
 <table style="margin-top:6px">
-<tr><td style="color:#ffff00">Yellow node</td><td>Not yet guessed</td></tr>
-<tr><td style="color:#80ff80">Green node</td><td>Correctly guessed / counted</td></tr>
-<tr><td style="color:#ff8080">Red node</td><td>Incorrectly guessed (Stabilizing)</td></tr>
-<tr><td style="color:#00cfcf">Cyan node</td><td>Initial-level guess (Terminating)</td></tr>
-<tr><td style="color:#ffc040">Orange node</td><td>Intermediate guess (Terminating)</td></tr>
+<tr><td><span class="swatch node-yellow"></span>Yellow node</td><td>Not yet guessed</td></tr>
+<tr><td><span class="swatch node-green"></span>Green node</td><td>Correctly guessed / counted</td></tr>
+<tr><td><span class="swatch node-red"></span>Red node</td><td>Incorrectly guessed (Stabilizing)</td></tr>
+<tr><td><span class="swatch node-cyan"></span>Cyan node</td><td>Initial-level guess (Terminating)</td></tr>
+<tr><td><span class="swatch node-orange"></span>Orange node</td><td>Intermediate guess (Terminating)</td></tr>
 </table>
 <h3>Display Options</h3>
 <table>

@@ -358,19 +358,22 @@ void SelectView(void){
 void SelectNodeXY(int x,int y,int *si,int *sj){
     float minDist=-1.0f;
     *si=-1; *sj=-1;
+    if(!aux || !aux->tot)return;
+    UpdateTreeView();
+    float r=fmaxf(TreeNodeRadius()*1.2f,6.0f);
     for(int i=0;i<aux->tot;i++){
         Vector *v=GetLevel(i);
-        float cy=ToScreenY(win1,((AuxData*)v->items[0])->y);
-        if(cy+NODE_SIZE*0.5f<y)continue;
-        if(cy-NODE_SIZE*0.5f>y)break;
+        float cy=TreeScreenY(((AuxData*)v->items[0])->y);
+        if(cy+r<y)continue;
+        if(cy-r>y)break;
         for(int j=0;j<v->tot;j++){
-            float cx=ToScreenX2(win1,((AuxData*)v->items[j])->x);
+            float cx=TreeScreenX(((AuxData*)v->items[j])->x);
             float dist=(cx-x)*(cx-x)+(cy-y)*(cy-y);
             if(*si==-1 || dist<minDist){ minDist=dist; *si=i; *sj=j; }
         }
         break;
     }
-    if(*si!=-1 && minDist<=NODE_SIZE*NODE_SIZE*0.25f)return;
+    if(*si!=-1 && minDist<=r*r)return;
     *si=-1; *sj=-1;
 }
 

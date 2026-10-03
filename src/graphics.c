@@ -208,6 +208,17 @@ void SetColor(int r,int g,int b){
     GL_Uniform4f(unifLineColor,r/255.0f,g/255.0f,b/255.0f,1.0f);
 }
 
+static void SetBorderColor(int border){
+    if(border==1){
+        if(uiTheme)SetColor(175,184,193);
+        else SetColor(128,128,128);
+    }
+    else if(border==2){
+        if(uiTheme)SetColor(31,35,40);
+        else SetColor(0,0,0);
+    }
+}
+
 void SetWidth(float line){
     lineWidth=line;
 }
@@ -355,8 +366,7 @@ void DrawRectangle(WindowData *win,float x,float y,float rx,float ry,bool fill,i
         glDrawArrays(GL_TRIANGLE_STRIP,0,4);
     }
     if(!border)return;
-    if(border==1)SetColor(128,128,128);
-    else SetColor(0,0,0);
+    SetBorderColor(border);
     float dx=lineWidth/win->w;
     float dy=lineWidth/win->h;
     vertices[0]=x-rx-dx; vertices[1]=-y+ry+dy;
@@ -390,8 +400,7 @@ void DrawPolygon(WindowData *win,int sides,float x,float y,float rx,float ry,boo
         glDrawArrays(GL_TRIANGLE_FAN,0,sides+2);
     }
     if(!border)return;
-    if(border==1)SetColor(128,128,128);
-    else if(border==2)SetColor(0,0,0);
+    SetBorderColor(border);
     float dx=lineWidth/win->w;
     float dy=lineWidth/win->h;
     for(int i=0;i<sides;i++){

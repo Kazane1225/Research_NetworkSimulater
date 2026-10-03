@@ -43,9 +43,13 @@ void DisplayMessage(const char *format,...){
     va_start(args,format);
     vsnprintf(infoMessage,sizeof(infoMessage),format,args);
     va_end(args);
+    #ifdef __EMSCRIPTEN__
+    EM_ASM({ if (typeof showAppMessage === 'function') showAppMessage(UTF8ToString($0)); },infoMessage);
+    #else
     renderMessage=true;
     win1->invalid=true;
     timeout=SDL_GetTicks()+MESSAGE_TIME;
+    #endif
 }
 
 void UndisplayMessage(void){
