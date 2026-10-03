@@ -244,7 +244,25 @@ bindToolbarKeyButton('btn-clear-round', 'Backspace', 'Backspace');
 bindToolbarKeyButton('btn-step', ' ', 'Space');
 bindToolbarKeyButton('btn-delete-agent', 'Delete', 'Delete');
 bindToolbarKeyButton('btn-deselect', 'Escape', 'Escape');
+bindToolbarKeyButton('btn-tree-zoom-in', 'z', 'KeyZ', { repeat: true });
+bindToolbarKeyButton('btn-tree-zoom-out', 'x', 'KeyX', { repeat: true });
+bindToolbarKeyButton('btn-tree-fit', 'f', 'KeyF');
 bindToolbarKeyButton('btn-load', 'l', 'KeyL');
+
+// Ctrl+wheel and trackpad pinch (reported as ctrlKey wheel) zoom the history tree
+// instead of the page. Runs in the capture phase so SDL never sees the event.
+window.addEventListener('wheel', e => {
+    if (!e.ctrlKey || e.target !== canvas || typeof Module._TreeZoomAt !== 'function') return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (e.clientX - rect.left) * canvas.width / rect.width;
+    const y = (e.clientY - rect.top) * canvas.height / rect.height;
+    const unit = e.deltaMode === 1 ? 0.05 : e.deltaMode === 2 ? 1 : 0.0025;
+    const factor = Math.min(2, Math.max(0.5, Math.exp(-e.deltaY * unit)));
+    if (Module._TreeZoomAt(factor, x, y)) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+}, { capture: true, passive: false });
 bindToolbarKeyButton('btn-save', 's', 'KeyS');
 
 // ── Options popover ───────────────────────────────────────────

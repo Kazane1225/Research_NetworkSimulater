@@ -46,6 +46,28 @@ bool IsTwoWayLinkModifierDown(void){
     return bothWays;
 }
 
+static bool IsCtrlDown(void){
+    #ifdef __EMSCRIPTEN__
+    return webCtrlHeld;
+    #else
+    return keyboardState[SDL_SCANCODE_LCTRL] || keyboardState[SDL_SCANCODE_RCTRL];
+    #endif
+}
+
+static bool IsShiftDown(void){
+    #ifdef __EMSCRIPTEN__
+    return webShiftHeld;
+    #else
+    return keyboardState[SDL_SCANCODE_LSHIFT] || keyboardState[SDL_SCANCODE_RSHIFT];
+    #endif
+}
+
+enum{ TREE_DRAG_NONE, TREE_DRAG_PAN, TREE_DRAG_MINIMAP };
+static int treeDrag=TREE_DRAG_NONE;
+static bool treeDragMoved=false;
+static bool treeDragDeselect=false;
+static float treeDragX,treeDragY;
+
 static bool CloseToSeparator(float x){
     return x>=SeparatorX()-5.0f && x<=SeparatorX()+5.0f;
 }
@@ -346,6 +368,18 @@ static void KeyPressed(SDL_Keycode key){
                 DisplayMessage("Snap agents to grid");
             }
             break;
+        case SDLK_Z:
+            ZoomTreeViewCentered(1.25f);
+            DisplayMessage("Zoom in history tree");
+            break;
+        case SDLK_X:
+            ZoomTreeViewCentered(0.8f);
+            DisplayMessage("Zoom out history tree");
+            break;
+        case SDLK_F:
+            if(ToggleTreeFit())DisplayMessage("Fit whole history tree");
+            else DisplayMessage("Readable history tree (drag to scroll)");
+            break;
         case SDLK_H:
             helping=true;
             resizeHover=resizing=false;
@@ -542,9 +576,27 @@ static void MousePressed2(SDL_MouseButtonEvent *button){ // specific to right pa
         CountingAlgorithm();
         win1->invalid=true;
     }
+    float x=button->x*win1->sx,y=button->y*win1->sy;
+    treeDragX=x; treeDragY=y;
+    treeDragMoved=false;
+    treeDragDeselect=false;
+    if(button->button==SDL_BUTTON_LEFT && TreeMinimapContains(x,y)){
+        treeDrag=TREE_DRAG_MINIMAP;
+        TreeMinimapMoveTo(x,y);
+        return;
+    }
+    if(button->button==SDL_BUTTON_RIGHT || button->button==SDL_BUTTON_MIDDLE){
+        treeDrag=TREE_DRAG_PAN;
+        return;
+    }
     if(button->button==SDL_BUTTON_LEFT){
         int si,sj;
-        SelectNodeXY(button->x*win1->sx,button->y*win1->sy,&si,&sj);
+        SelectNodeXY(x,y,&si,&sj);
+        if(si==-1){ // empty space: drag pans, a plain click deselects on release
+            treeDrag=TREE_DRAG_PAN;
+            treeDragDeselect=true;
+            return;
+        }
         if(si!=selectedNodeI || sj!=selectedNodeJ){
             selectedNodeI=si; selectedNodeJ=sj;
             numSteps=-1;
@@ -571,6 +623,16 @@ static void MousePressed3(SDL_MouseButtonEvent *button){ // specific to separato
 }
 
 static void MouseReleased(SDL_MouseButtonEvent *button){
+    if(treeDrag!=TREE_DRAG_NONE){
+        if(treeDragDeselect && !treeDragMoved && (selectedNodeI!=-1 || selectedNodeJ!=-1)){
+            selectedNodeI=selectedNodeJ=-1;
+            numSteps=-1;
+            CountingAlgorithm();
+            win1->invalid=true;
+        }
+        treeDrag=TREE_DRAG_NONE;
+        treeDragDeselect=false;
+    }
     if(button->button==SDL_BUTTON_LEFT){
         if(drawingEdge){
             drawingEdge=false;
@@ -619,6 +681,18 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
 }
 
 static void MouseMoved(SDL_MouseMotionEvent *motion){
+    if(treeDrag!=TREE_DRAG_NONE){
+        float x=motion->x*win1->sx,y=motion->y*win1->sy;
+        if(treeDrag==TREE_DRAG_MINIMAP)TreeMinimapMoveTo(x,y);
+        else{
+            if(!treeDragMoved && (x-treeDragX)*(x-treeDragX)+(y-treeDragY)*(y-treeDragY)>16.0f)treeDragMoved=true;
+            if(treeDragMoved){
+                PanTreeView(x-treeDragX,y-treeDragY);
+                treeDragX=x; treeDragY=y;
+            }
+        }
+        return;
+    }
     if(selectedEntity!=-1 && !drawingEdge && !resizing && (motion->state & SDL_BUTTON_LMASK)){
         int mx=motion->x*win1->sx;
         int my=motion->y*win1->sy;
@@ -657,8 +731,19 @@ static void MouseMoved(SDL_MouseMotionEvent *motion){
 
 static void MouseWheel(SDL_MouseWheelEvent *wheel){
     static float wheelTot=0.0f;
-    if(wheel->direction==SDL_MOUSEWHEEL_FLIPPED)wheelTot-=wheel->y;
-    else wheelTot+=wheel->y;
+    float wx=wheel->x,wy=wheel->y;
+    if(wheel->direction==SDL_MOUSEWHEEL_FLIPPED){ wx=-wx; wy=-wy; }
+    float mx=wheel->mouse_x*win1->sx,my=wheel->mouse_y*win1->sy;
+    if(mx>=SeparatorX()){
+        if(IsCtrlDown()){
+            if(wy)ZoomTreeView(powf(1.2f,wy),mx,my);
+            return;
+        }
+        if(IsShiftDown() && wy){ wx=-wy; wy=0.0f; }
+        if(wx)PanTreeView(-wx*NODE_SIZE,0.0f);
+        if(!wy)return;
+    }
+    wheelTot+=wy;
     int w=(int)truncf(wheelTot);
     if(w){
         wheelTot-=(float)w;
@@ -753,5 +838,11 @@ EMSCRIPTEN_KEEPALIVE void TestInsertRound(void){
 
 EMSCRIPTEN_KEEPALIVE void TestDeleteRound(void){
     KeyPressed(SDLK_MINUS);
+}
+
+EMSCRIPTEN_KEEPALIVE int TreeZoomAt(float factor,float x,float y){
+    if(helping || x<SeparatorX())return 0;
+    ZoomTreeView(factor,x,y);
+    return 1;
 }
 #endif

@@ -83,7 +83,7 @@
     --shadow: rgba(31, 35, 40, 0.14);
     --shadow-strong: rgba(31, 35, 40, 0.22);
     --shadow-glow: rgba(9, 105, 218, 0.22);
-    --label-overlay: rgba(31, 35, 40, 0.18);
+    --label-overlay: rgba(31, 35, 40, 0.45);
     --success: #1a7f37;
     --success-soft: rgba(26, 127, 55, 0.08);
     --success-border: rgba(26, 127, 55, 0.28);
@@ -429,6 +429,21 @@ canvas {
     flex-shrink: 0;
     box-shadow: 0 0 4px var(--leg-shadow);
 }
+[data-theme="light"] .leg-dot,
+[data-theme="light"] .swatch { box-shadow: 0 0 0 1px rgba(31, 35, 40, 0.45); }
+.swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 7px;
+    vertical-align: -1px;
+}
+.node-yellow { background: #e3b341; }
+.node-green  { background: #56d364; }
+.node-red    { background: #ff7070; }
+.node-cyan   { background: #39d8f5; }
+.node-orange { background: #ffa657; }
 .leg-tag {
     font-size: 10px;
     color: var(--text-faint);

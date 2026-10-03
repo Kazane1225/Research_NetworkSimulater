@@ -65,6 +65,7 @@ const LOCALE_JA = {
         tbRound:     'ラウンド',
         tbAlgorithm: 'アルゴリズム',
         tbEdit:      '編集',
+        tbView:      '履歴木',
         // アルゴリズムボタン
         btnNone:        'なし',
         btnStabilizing: '安定化',
@@ -139,6 +140,15 @@ const LOCALE_JA = {
 <tr><td>エージェント/ノードを左クリック</td><td>選択/選択解除</td></tr>
 <tr><td>マウスホイール</td><td>現在のラウンドを変更</td></tr>
 </table>
+<h3>マウス操作 — 履歴木パネル</h3>
+<table>
+<tr><td>空白領域をドラッグ</td><td>履歴木をスクロール（右/中ボタンのドラッグでも可）</td></tr>
+<tr><td>Ctrl＋ホイール またはピンチ</td><td>カーソル位置を中心に履歴木をズーム</td></tr>
+<tr><td>Shift＋ホイール</td><td>履歴木を横スクロール</td></tr>
+<tr><td>ミニマップ（左上）</td><td>木がパネルより大きいときに表示。クリック/ドラッグで移動</td></tr>
+<tr><td>Z / X</td><td>ズームイン / ズームアウト</td></tr>
+<tr><td>F</td><td>全体表示 ↔ 読みやすいサイズ（スクロール可）を切替</td></tr>
+</table>
 <h3>リンクの描画・削除時の修飾キー</h3>
 <table>
 <tr><td>Ctrl または Q</td><td>作成ではなくリンクを削除</td></tr>
@@ -169,11 +179,11 @@ const LOCALE_JA = {
 <tr><td>Space</td><td>アルゴリズムを1ステップ実行（先にエージェントまたは履歴ノードを選択）</td></tr>
 </table>
 <table style="margin-top:6px">
-<tr><td style="color:#ffff00">黄色ノード</td><td>未推定</td></tr>
-<tr><td style="color:#80ff80">緑色ノード</td><td>正しく推定/カウント済み</td></tr>
-<tr><td style="color:#ff8080">赤色ノード</td><td>誤った推定（安定化）</td></tr>
-<tr><td style="color:#00cfcf">シアンノード</td><td>初期レベルの推測（終了型）</td></tr>
-<tr><td style="color:#ffc040">オレンジノード</td><td>中間推測（終了型）</td></tr>
+<tr><td><span class="swatch node-yellow"></span>黄色ノード</td><td>未推定</td></tr>
+<tr><td><span class="swatch node-green"></span>緑色ノード</td><td>正しく推定/カウント済み</td></tr>
+<tr><td><span class="swatch node-red"></span>赤色ノード</td><td>誤った推定（安定化）</td></tr>
+<tr><td><span class="swatch node-cyan"></span>シアンノード</td><td>初期レベルの推測（終了型）</td></tr>
+<tr><td><span class="swatch node-orange"></span>オレンジノード</td><td>中間推測（終了型）</td></tr>
 </table>
 <h3>表示オプション</h3>
 <table>
