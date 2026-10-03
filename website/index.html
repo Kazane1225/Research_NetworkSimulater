@@ -151,16 +151,13 @@
 <!-- ── Canvas wrapper ─────────────────────────────────────────────── -->
 <div id="canvas-wrap">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-    <div id="compute-indicator" aria-hidden="true">
-        <div class="hg" aria-hidden="true">
-            <div class="hg-bulb hg-bulb-top"><span class="hg-sand"></span></div>
-            <div class="hg-bulb hg-bulb-bot"><span class="hg-sand"></span></div>
-            <span class="hg-stream"></span>
-            <svg class="hg-frame" viewBox="0 0 48 64" focusable="false">
-                <path d="M8 6 H40 L24 30 L40 58 H8 L24 30 Z"/>
-                <path class="hg-caps" d="M6 6 H42 M6 58 H42"/>
-            </svg>
-        </div>
+    <div id="compute-bar" aria-hidden="true"></div>
+    <div id="compute-indicator" role="status" aria-hidden="true">
+        <svg class="cmp-spinner" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <circle class="cmp-track" cx="12" cy="12" r="9"/>
+            <circle class="cmp-arc" cx="12" cy="12" r="9"/>
+        </svg>
+        <span class="cmp-label" data-i18n="computing">Computing</span>
         <span id="compute-elapsed">0.0s</span>
     </div>
     <span class="panel-label" id="label-network" data-i18n="labelNetwork">Network</span>

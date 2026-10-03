@@ -442,7 +442,7 @@ function updateNetStats() {
 
 setInterval(updateNetStats, 400);
 
-// Hourglass at the top centre of the canvas while a chunked recompute is in progress
+// Spinner pill and top progress bar while a chunked recompute is in progress
 // (see src/compute_job.c). Replaces the old canvas text "Computing...".
 const computeIndicator = document.getElementById('compute-indicator');
 const computeElapsedEl = document.getElementById('compute-elapsed');
@@ -467,12 +467,9 @@ function syncComputeIndicator() {
             clearTimeout(computeHideTimer);
             computeHideTimer = null;
         }
-        if (!computeIndicator.classList.contains('visible')) {
-            computeShownAt = performance.now();
-            const label = getLocale().ui.computing;
-            if (label) computeIndicator.setAttribute('aria-label', label);
-        }
+        if (!computeIndicator.classList.contains('visible')) computeShownAt = performance.now();
         computeIndicator.classList.add('visible');
+        canvasWrap.classList.add('computing');
         computeIndicator.setAttribute('aria-hidden', 'false');
         computeElapsedEl.textContent = (elapsedMs / 1000).toFixed(1) + 's';
     } else if (computeIndicator.classList.contains('visible') && !computeHideTimer) {
@@ -481,6 +478,7 @@ function syncComputeIndicator() {
             computeHideTimer = null;
             if (!isComputeJobBusy()) {
                 computeIndicator.classList.remove('visible');
+                canvasWrap.classList.remove('computing');
                 computeIndicator.setAttribute('aria-hidden', 'true');
             }
         }, remain);
