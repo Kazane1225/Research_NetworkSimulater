@@ -52,6 +52,33 @@ var Module = {
     },
 };
 
+// ── Action feedback toast (called from C via DisplayMessage) ──
+const appToast     = document.getElementById('app-toast');
+const appToastText = appToast.querySelector('.app-toast-text');
+let appToastTimer  = null;
+
+function translateAppMessage(msg) {
+    const M = getLocale().messages || {};
+    if (M[msg] !== undefined) return M[msg];
+    const step = /^Execute step (\d+)$/.exec(msg);
+    if (step && M.executeStep) return M.executeStep(step[1]);
+    return msg;
+}
+
+function showAppMessage(msg) {
+    appToastText.textContent = translateAppMessage(msg);
+    appToast.classList.toggle('error', /^(Cannot|Failed)/.test(msg));
+    if (appToast.classList.contains('visible')) {
+        appToast.classList.remove('bump');
+        void appToast.offsetWidth;
+        appToast.classList.add('bump');
+    } else {
+        appToast.classList.add('visible');
+    }
+    clearTimeout(appToastTimer);
+    appToastTimer = setTimeout(() => appToast.classList.remove('visible', 'bump'), 2400);
+}
+
 // ── Synthetic keyboard dispatch ───────────────────────────────
 // Emscripten registers its listener on window (capture phase).
 // Dispatching on window triggers it just like a real keystroke.
