@@ -151,6 +151,15 @@
 <!-- ── Canvas wrapper ─────────────────────────────────────────────── -->
 <div id="canvas-wrap">
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="compute-bar" aria-hidden="true"></div>
+    <div id="compute-indicator" role="status" aria-hidden="true">
+        <svg class="cmp-spinner" viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+            <circle class="cmp-track" cx="12" cy="12" r="9"/>
+            <circle class="cmp-arc" cx="12" cy="12" r="9"/>
+        </svg>
+        <span class="cmp-label" data-i18n="computing">Computing</span>
+        <span id="compute-elapsed">0.0s</span>
+    </div>
     <span class="panel-label" id="label-network" data-i18n="labelNetwork">Network</span>
     <span class="panel-label" id="label-history" data-i18n="labelHistory">History Tree</span>
 

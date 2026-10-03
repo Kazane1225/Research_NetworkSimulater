@@ -182,6 +182,7 @@ const LOCALE_JA = {
         guidedDone:  '\u2713 完了',
         // その他メッセージ
         wasmNotReady: 'WASMがまだ準備できていません — しばらく待ってから再試行してください。',
+        computing: '計算中',
         // ヘルプモーダル
         helpTitle: 'Anonymous Dynamic Networks — 操作ガイド',
         helpClose: '\u2715 閉じる',

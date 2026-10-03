@@ -164,13 +164,18 @@ function waitForAnimationFrame() {
     return new Promise(resolve => requestAnimationFrame(() => resolve()));
 }
 
-async function waitForToolbarRoundChange(readState, previousState, timeoutMs = 2000) {
+// `retry` (optional) is re-invoked on every polled frame while `readState()` hasn't changed yet.
+// This is used to keep re-sending the key while the backend is still finishing a previous
+// recompute (during which the corresponding action is a harmless no-op on the C side), so a
+// held-down +/- button keeps advancing smoothly instead of stalling until `timeoutMs`.
+async function waitForToolbarRoundChange(readState, previousState, retry, timeoutMs = 2000) {
     const deadline = performance.now() + timeoutMs;
     while (performance.now() < deadline) {
         if (readState() !== previousState) {
             await waitForAnimationFrame();
             return true;
         }
+        if (retry) retry();
         await waitForAnimationFrame();
     }
     return false;
@@ -204,7 +209,7 @@ function bindToolbarKeyButton(id, key, code, opts = {}) {
                 intervalTimer = null;
                 continue;
             }
-            const changed = await waitForToolbarRoundChange(readRepeatState, beforeState);
+            const changed = await waitForToolbarRoundChange(readRepeatState, beforeState, trigger);
             if (!changed) break;
         }
     }
@@ -436,6 +441,50 @@ function updateNetStats() {
 }
 
 setInterval(updateNetStats, 400);
+
+// Spinner pill and top progress bar while a chunked recompute is in progress
+// (see src/compute_job.c). Replaces the old canvas text "Computing...".
+const computeIndicator = document.getElementById('compute-indicator');
+const computeElapsedEl = document.getElementById('compute-elapsed');
+let computeHideTimer = null;
+const COMPUTE_SHOW_AFTER_MS = 150;
+const COMPUTE_MIN_VISIBLE_MS = 480;
+let computeShownAt = 0;
+
+function isComputeJobBusy() {
+    return typeof Module._IsComputeJobBusy === 'function' && !!Module._IsComputeJobBusy();
+}
+
+function syncComputeIndicator() {
+    if (!computeIndicator) return;
+    const busy = isComputeJobBusy();
+    if (busy) {
+        const elapsedMs = typeof Module._GetComputeJobElapsedMs === 'function'
+            ? Module._GetComputeJobElapsedMs()
+            : 0;
+        if (elapsedMs < COMPUTE_SHOW_AFTER_MS) return;
+        if (computeHideTimer) {
+            clearTimeout(computeHideTimer);
+            computeHideTimer = null;
+        }
+        if (!computeIndicator.classList.contains('visible')) computeShownAt = performance.now();
+        computeIndicator.classList.add('visible');
+        canvasWrap.classList.add('computing');
+        computeIndicator.setAttribute('aria-hidden', 'false');
+        computeElapsedEl.textContent = (elapsedMs / 1000).toFixed(1) + 's';
+    } else if (computeIndicator.classList.contains('visible') && !computeHideTimer) {
+        const remain = Math.max(0, COMPUTE_MIN_VISIBLE_MS - (performance.now() - computeShownAt));
+        computeHideTimer = setTimeout(() => {
+            computeHideTimer = null;
+            if (!isComputeJobBusy()) {
+                computeIndicator.classList.remove('visible');
+                canvasWrap.classList.remove('computing');
+                computeIndicator.setAttribute('aria-hidden', 'true');
+            }
+        }, remain);
+    }
+}
+setInterval(syncComputeIndicator, 100);
 
 // ── UI Tour (existing tutorial) ─────────────────────────
 const TUTORIAL_STEPS = [

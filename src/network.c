@@ -210,17 +210,25 @@ static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int 
     }
 }
 
+void RecordRebuildPerf(double elapsedMs){
+    lastRebuildMs=elapsedMs; sumRebuildMs+=elapsedMs; rebuildSamples++;
+}
+
+HistoryTree *ExecuteNetworkMergeEntity(HistoryTree *target,Entity *e){
+    return MergeHistoryTrees(target,e->history,NULL);
+}
+
 static void InitFinalHistoryFromEntities(void){
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
     double t0=PerfNowMs();
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
-        e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
+        e->finalLeaf=ExecuteNetworkMergeEntity(finalHistory,e);
     }
     ComputeAuxData(finalHistory);
     double elapsed=PerfNowMs()-t0;
-    lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
+    RecordRebuildPerf(elapsed);
 }
 
 static void CollectMailboxRedInfo(int n,RedInfo ***infos,int **counts){
@@ -423,7 +431,7 @@ void AppendLastRound(void){
     RecordAppendPerf(0.0,afterAux-totalStart,0.0,0.0,afterAux-totalStart);
 }
 
-void ExecuteNetwork(void){
+void ExecuteNetworkResetEntities(void){
     SetHistoryTreeMutationRound(0);
     for(int i=0;i<network->entities->tot;i++){
         Entity *e=GetEntity(i);
@@ -433,20 +441,35 @@ void ExecuteNetwork(void){
         e->current=e->history=NewHistoryTree();
         ExtendHistory(e);
     }
+}
+
+void ExecuteNetworkRunRound(int r){
     int R=network->rounds->tot;
-    for(int r=0;r<R;r++){
-        if(r==R-1)TakeSnapshotsBeforeRound();
-        SetHistoryTreeMutationRound(r+1);
-        Vector *v=network->rounds->items[r];
-        for(int i=0;i<v->tot;i++)
-            ExecuteInteraction(v->items[i]);
-        for(int i=0;i<network->entities->tot;i++)
-            EndRound(GetEntity(i));
-    }
+    if(r==R-1)TakeSnapshotsBeforeRound();
+    SetHistoryTreeMutationRound(r+1);
+    Vector *v=network->rounds->items[r];
+    for(int i=0;i<v->tot;i++)
+        ExecuteInteraction(v->items[i]);
+    for(int i=0;i<network->entities->tot;i++)
+        EndRound(GetEntity(i));
+}
+
+// Synchronous version of what ComputeJob_RequestRecompute() does across multiple frames.
+// Still used directly for full reloads (InitNetwork/LoadNetworkHelper/TutorialLoadNetwork),
+// where there is no previous graphic worth preserving frame-by-frame. Cancels any in-flight
+// job first, since that job's saved round/entity indices would otherwise no longer match
+// `network` afterwards.
+void ExecuteNetwork(void){
+    ComputeJob_CancelActive();
+    ExecuteNetworkResetEntities();
+    int R=network->rounds->tot;
+    for(int r=0;r<R;r++)
+        ExecuteNetworkRunRound(r);
     InitFinalHistoryFromEntities();
 }
 
 void DoneNetwork(void){
+    ComputeJob_CancelActive(); // about to free entities/rounds a paused job might still reference
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NULL;
@@ -569,6 +592,9 @@ static bool LoadNetworkHelper(SDL_IOStream *stream){
     float x,y;
     size_t length=0,readBytes=0;
     char ch;
+    // Cancel first: the global `network` pointer below is about to be swapped to a brand
+    // new (empty, then progressively filled) object, which a paused job must never see.
+    ComputeJob_CancelActive();
     Network *backup=network;
     network=malloc(sizeof(Network));
     network->entities=NewVector(8);
