@@ -2,8 +2,10 @@
 setlocal EnableDelayedExpansion
 
 set "OPEN_BROWSER=1"
-if /i "%~1"=="--no-open" set "OPEN_BROWSER=0"
-if /i "%~1"=="--no-browser" set "OPEN_BROWSER=0"
+for %%A in (%*) do (
+  if /i "%%~A"=="--no-open" set "OPEN_BROWSER=0"
+  if /i "%%~A"=="--no-browser" set "OPEN_BROWSER=0"
+)
 
 rem Browser: brave | chrome | edge | default
 set "BROWSER=brave"

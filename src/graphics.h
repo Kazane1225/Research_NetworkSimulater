@@ -107,6 +107,9 @@ void FreeWindow(WindowData *win);
 void SetWindowContext(WindowData *win);
 void SetWindowViewport(WindowData *win);
 void RenderWindow(WindowData *win);
+extern int uiTheme; /* 0 = dark, 1 = light */
+void SetUiTheme(int theme);
+void ApplyClearColor(void);
 void SetColor(int r,int g,int b);
 void SetWidth(float line);
 void PrepareRenderLine(void);

@@ -13,6 +13,21 @@ bool draggingEntity=false;
 int algorithm=0;
 int numSteps=-1;
 
+typedef struct {
+    double lastSnapshotMs;
+    double lastExecuteMs;
+    double lastFinalHistoryMs;
+    double lastAuxMs;
+    double lastTotalMs;
+    double sumSnapshotMs;
+    double sumExecuteMs;
+    double sumFinalHistoryMs;
+    double sumAuxMs;
+    double sumTotalMs;
+    int samples;
+} AppendPerfStats;
+
+static AppendPerfStats appendPerfStats={0};
 static double lastRebuildMs=0.0;
 static double sumRebuildMs=0.0;
 static int rebuildSamples=0;
@@ -25,6 +40,24 @@ static double PerfNowMs(void){
 #else
     return 0.0;
 #endif
+}
+
+static void ResetAppendPerfStats(void){
+    appendPerfStats=(AppendPerfStats){0};
+}
+
+static void RecordAppendPerf(double snapshotMs,double executeMs,double finalHistoryMs,double auxMs,double totalMs){
+    appendPerfStats.lastSnapshotMs=snapshotMs;
+    appendPerfStats.lastExecuteMs=executeMs;
+    appendPerfStats.lastFinalHistoryMs=finalHistoryMs;
+    appendPerfStats.lastAuxMs=auxMs;
+    appendPerfStats.lastTotalMs=totalMs;
+    appendPerfStats.sumSnapshotMs+=snapshotMs;
+    appendPerfStats.sumExecuteMs+=executeMs;
+    appendPerfStats.sumFinalHistoryMs+=finalHistoryMs;
+    appendPerfStats.sumAuxMs+=auxMs;
+    appendPerfStats.sumTotalMs+=totalMs;
+    appendPerfStats.samples++;
 }
 
 Entity *GetEntity(int i){
@@ -51,10 +84,6 @@ static Interaction *CopyInteraction(Interaction *interaction){
     interaction2->e2=interaction->e2;
     interaction2->multiplicity=interaction->multiplicity;
     return interaction2;
-}
-
-static void ExecuteInteraction(Interaction *interaction){
-    SendHistory(interaction->e1,interaction->e2,interaction->multiplicity);
 }
 
 void SortLeaders(void){ // put all leaders at the beginning of the list of entities
@@ -96,38 +125,247 @@ void InitNetwork(int type,int n){
     win1->invalid=true;
 }
 
-void ExecuteNetwork(void){
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        if(e->history)FreeHistoryTree(e->history);
-        e->outdegree=outAware?0:-1;
-        e->current=e->history=NewHistoryTree();
-        ExtendHistory(e);
+/* ── simulation ───────────────────────────────────────────────────────────── */
+
+/* finalHistory is built one level per round without materialising entity views: an entity's
+   node at level r+1 is the child of its level-r node identified by its input, its outdegree in
+   round r and the multiset of level-r nodes it received messages from. Children are created in
+   entity order, so the tree depends only on the network (not on the edits that produced it),
+   and the leader's node, entity 0 after SortLeaders, is the first child at every level. */
+
+typedef struct{HistoryTree *target;int mult;}RedInfo;
+static int cmp_redinfo(const void *a,const void *b){
+    uintptr_t pa=(uintptr_t)((const RedInfo *)a)->target;
+    uintptr_t pb=(uintptr_t)((const RedInfo *)b)->target;
+    return (pa>pb)-(pa<pb);
+}
+
+static void AssignEntityIndices(void){
+    for(int i=0;i<network->entities->tot;i++)GetEntity(i)->index=i;
+}
+
+/* infos must be sorted by target and free of duplicate targets, like a node's observations. */
+static HistoryTree *FindOrAddChild(HistoryTree *par,int input,int outdegree,const RedInfo *infos,int nc){
+    for(int j=0;j<par->children->tot;j++){
+        HistoryTree *z=par->children->items[j];
+        if(z->input!=input||z->outdegree!=outdegree||z->observations->tot!=nc)continue;
+        bool ok=true;
+        for(int k=0;k<nc&&ok;k++){
+            Observation *o=z->observations->items[k];
+            if(o->history!=infos[k].target||o->multiplicity!=infos[k].mult)ok=false;
+        }
+        if(ok)return z;
     }
-    for(int r=0;r<network->rounds->tot;r++){
-        Vector *v=network->rounds->items[r];
-        for(int i=0;i<v->tot;i++)
-            ExecuteInteraction(v->items[i]);
-        for(int i=0;i<network->entities->tot;i++)
-            EndRound(GetEntity(i));
+    HistoryTree *node=AddHistoryTreeChild(par,input);
+    node->outdegree=outdegree;
+    for(int k=0;k<nc;k++)AddRedEdge(node,infos[k].target,infos[k].mult);
+    return node;
+}
+
+static void SimulateLevel0(HistoryTree *root,HistoryTree **leaves){
+    int outdegree=outAware?0:-1;
+    for(int i=0;i<network->entities->tot;i++)
+        leaves[i]=FindOrAddChild(root,GetEntity(i)->input,outdegree,NULL,0);
+}
+
+/* Advances leaves[i] (the node of entity i) by round r. Entity indices must be current. */
+static void SimulateRound(int r,HistoryTree **leaves){
+    int n=network->entities->tot;
+    Vector *v=network->rounds->items[r];
+    int *start=calloc((size_t)n+1,sizeof(int));
+    int *fill=calloc((size_t)n+1,sizeof(int));
+    int *outdegree=malloc(((size_t)n+1)*sizeof(int));
+    RedInfo *infos=malloc((size_t)(v->tot>0?v->tot:1)*sizeof(RedInfo));
+    for(int i=0;i<n;i++)outdegree[i]=outAware?0:-1;
+    for(int k=0;k<v->tot;k++){
+        Interaction *interaction=v->items[k];
+        start[interaction->e2->index+1]++;
+    }
+    for(int i=0;i<n;i++)start[i+1]+=start[i];
+    for(int k=0;k<v->tot;k++){
+        Interaction *interaction=v->items[k];
+        int s=interaction->e1->index,d=interaction->e2->index;
+        infos[start[d]+fill[d]++]=(RedInfo){leaves[s],interaction->multiplicity};
+        if(outAware)outdegree[s]+=interaction->multiplicity;
+    }
+    for(int i=0;i<n;i++){
+        RedInfo *seg=infos+start[i];
+        int m=start[i+1]-start[i];
+        qsort(seg,(size_t)m,sizeof(RedInfo),cmp_redinfo);
+        int u=0;
+        for(int j=0;j<m;j++){
+            if(u>0&&seg[u-1].target==seg[j].target)seg[u-1].mult+=seg[j].mult;
+            else seg[u++]=seg[j];
+        }
+        leaves[i]=FindOrAddChild(leaves[i],GetEntity(i)->input,outdegree[i],seg,u);
+    }
+    free(infos);
+    free(outdegree);
+    free(fill);
+    free(start);
+}
+
+static HistoryTree **simLeaves=NULL;
+static int simN=0;
+static int simNext=0;
+static int simEnd=0;
+
+static void FreeSimState(void){
+    free(simLeaves);
+    simLeaves=NULL;
+    simN=0;
+    simNext=0;
+    simEnd=0;
+}
+
+static void CommitSimLeaves(void){
+    for(int i=0;i<simN;i++)GetEntity(i)->finalLeaf=simLeaves[i];
+}
+
+/* Extends finalHistory and aux by round r, which must be the round right after the deepest level. */
+static void ExtendFinalHistoryByRound(int r){
+    int n=network->entities->tot;
+    HistoryTree **leaves=malloc(((size_t)n+1)*sizeof(HistoryTree*));
+    AssignEntityIndices();
+    for(int i=0;i<n;i++)leaves[i]=GetEntity(i)->finalLeaf;
+    SimulateRound(r,leaves);
+    for(int i=0;i<n;i++)GetEntity(i)->finalLeaf=leaves[i];
+    free(leaves);
+    AppendAuxDataOneLevel();
+}
+
+/* aux has one level for the root plus one per finalHistory level (rounds+1 of them). */
+static bool FinalHistoryHasLevels(int auxLevels){
+    if(!finalHistory||!aux||aux->tot!=auxLevels)return false;
+    for(int i=0;i<network->entities->tot;i++)
+        if(!GetEntity(i)->finalLeaf)return false;
+    return true;
+}
+
+static bool CanTrimToLevel(int keepLevel){
+    int keepAux=keepLevel+2;
+    if(!finalHistory||!aux||aux->tot<keepAux)return false;
+    for(int i=0;i<network->entities->tot;i++){
+        HistoryTree *h=GetEntity(i)->finalLeaf;
+        if(!h)return false;
+        while(h&&h->level>keepLevel)h=h->parent;
+        if(!h||h->level!=keepLevel)return false;
+    }
+    return true;
+}
+
+/* Removes the deepest level of finalHistory and of aux; entities move back to their parents. */
+static void TrimFinalHistoryLastLevel(void){
+    int n=network->entities->tot;
+    for(int i=0;i<n;i++)GetEntity(i)->finalLeaf=GetEntity(i)->finalLeaf->parent;
+    Vector *deepest=GetLevel(aux->tot-1);
+    int m=deepest->tot;
+    HistoryTree **nodes=malloc((size_t)(m>0?m:1)*sizeof(HistoryTree*));
+    for(int j=0;j<m;j++)nodes[j]=((AuxData*)deepest->items[j])->h;
+    TrimAuxDataOneLevel();
+    for(int j=0;j<m;j++){
+        HistoryTree *node=nodes[j];
+        HistoryTree *par=node->parent;
+        if(par){
+            for(int i=0;i<par->children->tot;i++){
+                if(par->children->items[i]==node){
+                    DeinsertVector(par->children,i);
+                    break;
+                }
+            }
+        }
+        FreeHistoryTree(node);
+    }
+    free(nodes);
+}
+
+static void TrimFinalHistoryToLevel(int keepLevel){
+    int keepAux=keepLevel+2;
+    while(aux&&aux->tot>keepAux)TrimFinalHistoryLastLevel();
+}
+
+/* Re-execute only the last round after its interactions changed. */
+void ReExecuteLastRound(void){
+    int R=network->rounds->tot;
+    if(R==0||!FinalHistoryHasLevels(R+2)){ExecuteNetwork();return;}
+    TrimFinalHistoryLastLevel();
+    ExtendFinalHistoryByRound(R-1);
+}
+
+/* Drop the deepest level after DeleteRound(last) removed the last round. */
+void RollBackLastRound(void){
+    if(!FinalHistoryHasLevels(network->rounds->tot+3)){ExecuteNetwork();return;}
+    TrimFinalHistoryLastLevel();
+}
+
+/* Add one level for the round InsertRound() just appended at the end. */
+void AppendLastRound(void){
+    double totalStart=PerfNowMs();
+    int R=network->rounds->tot;
+    if(R==0||!FinalHistoryHasLevels(R+1))ExecuteNetwork();
+    else ExtendFinalHistoryByRound(R-1);
+    double elapsed=PerfNowMs()-totalStart;
+    RecordAppendPerf(0.0,elapsed,0.0,0.0,elapsed);
+}
+
+/* firstRound<0 rebuilds from an empty tree. firstRound>=0 keeps levels up to firstRound
+   (level 0 is the input layer; round r produces level r+1) and replays [firstRound, R). */
+void ExecuteNetworkReplayBegin(int firstRound){
+    FreeSimState();
+    int n=network->entities->tot;
+    simN=n;
+    simLeaves=malloc(((size_t)n+1)*sizeof(HistoryTree*));
+    AssignEntityIndices();
+    if(firstRound>=0&&CanTrimToLevel(firstRound)){
+        TrimFinalHistoryToLevel(firstRound);
+        for(int i=0;i<n;i++)simLeaves[i]=GetEntity(i)->finalLeaf;
+        simNext=firstRound;
+        simEnd=network->rounds->tot;
+        return;
     }
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NewHistoryTree();
-    double t0=PerfNowMs();
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
-    }
+    SimulateLevel0(finalHistory,simLeaves);
+    simNext=0;
+    simEnd=network->rounds->tot;
+}
+
+int ExecuteNetworkReplayStep(void){
+    if(simNext>=simEnd)return 1;
+    SimulateRound(simNext,simLeaves);
+    simNext++;
+    return simNext>=simEnd;
+}
+
+void ExecuteNetworkReplayFinish(void){
+    CommitSimLeaves();
+    FreeSimState();
     ComputeAuxData(finalHistory);
+}
+
+static void RunReplay(int firstRound){
+    double t0=PerfNowMs();
+    ExecuteNetworkReplayBegin(firstRound);
+    while(!ExecuteNetworkReplayStep());
+    ExecuteNetworkReplayFinish();
     double elapsed=PerfNowMs()-t0;
     lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
 }
 
+void ExecuteNetworkFromRound(int firstRound){
+    RunReplay(firstRound<0?0:firstRound);
+}
+
+void ExecuteNetwork(void){
+    RunReplay(-1);
+}
+
 void DoneNetwork(void){
-    if(!network)return;
+    FreeSimState();
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NULL;
+    if(!network)return;
     for(int i=0;i<network->entities->tot;i++)
         FreeEntity(GetEntity(i));
     for(int r=network->rounds->tot-1;r>=0;r--)
@@ -345,6 +583,16 @@ void HandleLoadedFile(const char *data,int length){
     free((void*)data);
 }
 
+EMSCRIPTEN_KEEPALIVE void BenchLoadNetworkText(const char *text){
+    if(!text || !*text)return;
+    DoneNetwork();
+    size_t len=SDL_strlen(text);
+    char *copy=SDL_malloc(len);
+    if(!copy)return;
+    SDL_memcpy(copy,text,len);
+    HandleLoadedFile(copy,(int)len);
+}
+
 EM_JS(void,LoadFileHelper,(void),{
     const input=document.createElement('input');
     input.type='file';
@@ -510,6 +758,61 @@ EMSCRIPTEN_KEEPALIVE int GetNumRounds(void){
     return network ? network->rounds->tot : 0;
 }
 
+EMSCRIPTEN_KEEPALIVE void ResetAppendPerfMetrics(void){
+    ResetAppendPerfStats();
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendSnapshotMs(void){
+    return appendPerfStats.lastSnapshotMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendExecuteMs(void){
+    return appendPerfStats.lastExecuteMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendFinalHistoryMs(void){
+    return appendPerfStats.lastFinalHistoryMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendAuxMs(void){
+    return appendPerfStats.lastAuxMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetLastAppendTotalMs(void){
+    return appendPerfStats.lastTotalMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendSnapshotMs(void){
+    return appendPerfStats.sumSnapshotMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendExecuteMs(void){
+    return appendPerfStats.sumExecuteMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendFinalHistoryMs(void){
+    return appendPerfStats.sumFinalHistoryMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendAuxMs(void){
+    return appendPerfStats.sumAuxMs;
+}
+
+EMSCRIPTEN_KEEPALIVE double GetSumAppendTotalMs(void){
+    return appendPerfStats.sumTotalMs;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAppendPerfSamples(void){
+    return appendPerfStats.samples;
+}
+
+EMSCRIPTEN_KEEPALIVE void ResetRebuildPerfMetrics(void){
+    lastRebuildMs=0.0; sumRebuildMs=0.0; rebuildSamples=0;
+}
+EMSCRIPTEN_KEEPALIVE double GetLastRebuildMs(void){ return lastRebuildMs; }
+EMSCRIPTEN_KEEPALIVE double GetSumRebuildMs(void)  { return sumRebuildMs;  }
+EMSCRIPTEN_KEEPALIVE int    GetRebuildSamples(void){ return rebuildSamples; }
+
 EMSCRIPTEN_KEEPALIVE int GetCurrentRound(void){
     return currentRound; // 0-based; -1 if no rounds
 }
@@ -532,11 +835,6 @@ EMSCRIPTEN_KEEPALIVE int GetNumAnonymityClasses(void){
     if(level<0)return 0;
     return GetLevel(level)->tot;
 }
-
-EMSCRIPTEN_KEEPALIVE void ResetRebuildPerfMetrics(void){ lastRebuildMs=0.0; sumRebuildMs=0.0; rebuildSamples=0; }
-EMSCRIPTEN_KEEPALIVE double GetLastRebuildMs(void){ return lastRebuildMs; }
-EMSCRIPTEN_KEEPALIVE double GetSumRebuildMs(void)  { return sumRebuildMs;  }
-EMSCRIPTEN_KEEPALIVE int    GetRebuildSamples(void){ return rebuildSamples; }
 
 EMSCRIPTEN_KEEPALIVE int GetNumUniqueAgents(void){
     int level=AuxLevelForCurrentRound();
@@ -623,22 +921,151 @@ EMSCRIPTEN_KEEPALIVE int GetRootGuess(void){
     return GetAuxData(0,0)->guess;
 }
 
+EMSCRIPTEN_KEEPALIVE int GetNumGuessedNodes(void){
+    if(!aux || aux->tot==0)return 0;
+    int count=0;
+    for(int i=0;i<aux->tot;i++){
+        Vector *v=GetLevel(i);
+        for(int j=0;j<v->tot;j++)
+            if(((AuxData*)v->items[j])->guess!=-1)count++;
+    }
+    return count;
+}
+
 EMSCRIPTEN_KEEPALIVE int GetSelectedEntity(void){
     return selectedEntity;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetSelectedNodeI(void){
+    return selectedNodeI;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetSelectedNodeJ(void){
+    return selectedNodeJ;
+}
+
+static unsigned SpecHashMix(unsigned h,unsigned v){
+    h^=v;
+    h*=16777619u;
+    return h;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned GetNetworkSpecFingerprint(void){
+    unsigned h=2166136261u;
+    if(!network)return h;
+    h=SpecHashMix(h,(unsigned)network->entities->tot);
+    h=SpecHashMix(h,(unsigned)network->rounds->tot);
+    h=SpecHashMix(h,(unsigned)currentRound);
+    for(int r=0;r<network->rounds->tot;r++){
+        Vector *v=network->rounds->items[r];
+        h=SpecHashMix(h,(unsigned)v->tot);
+        for(int j=0;j<v->tot;j++){
+            Interaction *in=v->items[j];
+            h=SpecHashMix(h,(unsigned)GetEntityIndex(in->e1));
+            h=SpecHashMix(h,(unsigned)GetEntityIndex(in->e2));
+            h=SpecHashMix(h,(unsigned)in->multiplicity);
+        }
+    }
+    if(aux && aux->tot>0){
+        h=SpecHashMix(h,(unsigned)aux->tot);
+        for(int i=0;i<aux->tot;i++){
+            Vector *lv=GetLevel(i);
+            h=SpecHashMix(h,(unsigned)lv->tot);
+            for(int j=0;j<lv->tot;j++){
+                AuxData *d=lv->items[j];
+                h=SpecHashMix(h,(unsigned)d->anonymity);
+                h=SpecHashMix(h,(unsigned)d->guess);
+            }
+        }
+    }
+    return h;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned GetNetworkSemanticFingerprint(void){
+    unsigned h=2166136261u;
+    if(!network)return h;
+    h=SpecHashMix(h,(unsigned)network->entities->tot);
+    h=SpecHashMix(h,(unsigned)network->rounds->tot);
+    h=SpecHashMix(h,(unsigned)currentRound);
+    for(int r=0;r<network->rounds->tot;r++){
+        Vector *v=network->rounds->tot>0?network->rounds->items[r]:NULL;
+        if(!v)continue;
+        h=SpecHashMix(h,(unsigned)v->tot);
+        for(int j=0;j<v->tot;j++){
+            Interaction *in=v->items[j];
+            h=SpecHashMix(h,(unsigned)GetEntityIndex(in->e1));
+            h=SpecHashMix(h,(unsigned)GetEntityIndex(in->e2));
+            h=SpecHashMix(h,(unsigned)in->multiplicity);
+        }
+    }
+    if(aux && aux->tot>0){
+        h=SpecHashMix(h,(unsigned)aux->tot);
+        for(int i=0;i<aux->tot;i++){
+            Vector *lv=GetLevel(i);
+            h=SpecHashMix(h,(unsigned)lv->tot);
+            for(int j=0;j<lv->tot;j++){
+                AuxData *d=lv->items[j];
+                h=SpecHashMix(h,(unsigned)d->anonymity);
+                h=SpecHashMix(h,(unsigned)d->guess);
+            }
+        }
+    }
+    return h;
 }
 
 EMSCRIPTEN_KEEPALIVE void TestGotoRound(int r){
     if(!network || r<-1 || r>=network->rounds->tot)return;
     currentRound=r;
+    numSteps=-1;
+    CountingAlgorithm();
 }
 
 EMSCRIPTEN_KEEPALIVE int GetAuxLevelCount(void){
-    return aux?aux->tot:0;
+    return aux ? aux->tot : 0;
 }
 
 EMSCRIPTEN_KEEPALIVE int GetAuxLevelWidth(int level){
     if(!aux || level<0 || level>=aux->tot)return 0;
     return GetLevel(level)->tot;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxCell(int level,int j){
+    if(!aux || level<0 || level>=aux->tot)return -1;
+    Vector *v=GetLevel(level);
+    if(j<0 || j>=v->tot)return -1;
+    AuxData *d=v->items[j];
+    return d->anonymity*100000+(d->guess+1);
+}
+
+EMSCRIPTEN_KEEPALIVE int GetAuxCellVisible(int level,int j){
+    if(!aux || level<0 || level>=aux->tot)return -1;
+    Vector *v=GetLevel(level);
+    if(j<0 || j>=v->tot)return -1;
+    return ((AuxData*)v->items[j])->visible?1:0;
+}
+
+EMSCRIPTEN_KEEPALIVE unsigned GetVistaVisibleFingerprint(void){
+    unsigned h=2166136261u;
+    if(!aux)return h;
+    for(int i=0;i<aux->tot;i++){
+        Vector *lv=GetLevel(i);
+        h=SpecHashMix(h,(unsigned)lv->tot);
+        for(int j=0;j<lv->tot;j++){
+            AuxData *d=lv->items[j];
+            h=SpecHashMix(h,d->visible?1u:0u);
+            h=SpecHashMix(h,(unsigned)d->anonymity);
+            h=SpecHashMix(h,(unsigned)(d->guess+1));
+        }
+    }
+    return h;
+}
+
+EMSCRIPTEN_KEEPALIVE int GetEntityFinalLeafCell(int agent){
+    if(!network || agent<0 || agent>=network->entities->tot)return -1;
+    Entity *e=GetEntity(agent);
+    if(!e||!e->finalLeaf||!e->finalLeaf->data)return -1;
+    AuxData *d=e->finalLeaf->data;
+    return d->i*100000+d->j;
 }
 
 EMSCRIPTEN_KEEPALIVE int GetAuxLevelUniqueCount(int level){
