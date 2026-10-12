@@ -30,6 +30,7 @@ void AppendLastRound(void);    // add one level for a round appended at the end
 void ExecuteNetworkReplayBegin(int firstRound); // firstRound<0 rebuilds from the root
 int ExecuteNetworkReplayStep(void); // one round; 1 when rounds are done
 void ExecuteNetworkReplayFinish(void); // commit leaves and rebuild aux
+void RecordRebuildPerf(double elapsedMs);
 void DoneNetwork(void);
 void InsertRound(int index,bool copy);
 void DeleteInteractions(int index);

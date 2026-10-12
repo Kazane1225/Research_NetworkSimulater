@@ -393,6 +393,104 @@ canvas {
 #label-network  { left: 10px; }
 #label-history  { right: 10px; }
 
+/* ── Compute indicator (top centre, while a chunked recompute is running) ─ */
+#compute-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    z-index: 31;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
+#compute-bar::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 35%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent) 45%, var(--accent) 55%, transparent);
+    animation: cmp-bar 1.25s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+#canvas-wrap.computing #compute-bar { opacity: 1; }
+@keyframes cmp-bar {
+    from { transform: translateX(-100%); }
+    to   { transform: translateX(290%); }
+}
+
+#compute-indicator {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px 6px 10px;
+    border-radius: 999px;
+    background: var(--panel-bg-solid);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 20px var(--shadow);
+    backdrop-filter: blur(6px);
+    color: var(--text-strong);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -8px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+}
+#compute-indicator.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+}
+.cmp-spinner {
+    width: 16px;
+    height: 16px;
+    flex: 0 0 auto;
+    animation: cmp-rotate 1.4s linear infinite;
+}
+.cmp-spinner circle {
+    fill: none;
+    stroke-width: 2.5;
+}
+.cmp-track { stroke: var(--accent-soft); }
+.cmp-arc {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    stroke-dasharray: 1 57;
+    animation: cmp-dash 1.4s ease-in-out infinite;
+}
+@keyframes cmp-rotate {
+    to { transform: rotate(360deg); }
+}
+@keyframes cmp-dash {
+    0%   { stroke-dasharray: 1 57;  stroke-dashoffset: 0; }
+    50%  { stroke-dasharray: 34 57; stroke-dashoffset: -10; }
+    100% { stroke-dasharray: 34 57; stroke-dashoffset: -56; }
+}
+#compute-elapsed {
+    padding-left: 8px;
+    border-left: 1px solid var(--border);
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    min-width: 3.4em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cmp-spinner, .cmp-arc, #compute-bar::before { animation: none; }
+    .cmp-arc { stroke-dasharray: 20 57; }
+    #compute-bar::before { width: 100%; opacity: 0.6; }
+}
 /* ── Node-colour legend ──────────────────────────────────── */
 #node-legend {
     position: absolute;
@@ -1192,8 +1290,9 @@ body.modal-open { overflow: hidden; }
     user-select: none;
     opacity: 0;
     transform: translate(-50%, -8px);
-    transition: opacity 0.18s ease, transform 0.18s ease;
+    transition: opacity 0.18s ease, transform 0.18s ease, top 0.22s ease;
 }
+#canvas-wrap.computing #app-toast { top: 52px; }
 #app-toast.visible {
     opacity: 1;
     transform: translate(-50%, 0);

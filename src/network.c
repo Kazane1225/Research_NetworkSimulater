@@ -353,14 +353,21 @@ static void RunReplay(int firstRound){
 }
 
 void ExecuteNetworkFromRound(int firstRound){
+    ComputeJob_CancelActive();
     RunReplay(firstRound<0?0:firstRound);
 }
 
+void RecordRebuildPerf(double elapsedMs){
+    lastRebuildMs=elapsedMs; sumRebuildMs+=elapsedMs; rebuildSamples++;
+}
+
 void ExecuteNetwork(void){
+    ComputeJob_CancelActive();
     RunReplay(-1);
 }
 
 void DoneNetwork(void){
+    ComputeJob_CancelActive();
     FreeSimState();
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
@@ -485,6 +492,9 @@ static bool LoadNetworkHelper(SDL_IOStream *stream){
     float x,y;
     size_t length=0,readBytes=0;
     char ch;
+    // Cancel first: the global `network` pointer below is about to be swapped to a brand
+    // new (empty, then progressively filled) object, which a paused job must never see.
+    ComputeJob_CancelActive();
     Network *backup=network;
     network=malloc(sizeof(Network));
     network->entities=NewVector(8);

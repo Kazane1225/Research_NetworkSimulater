@@ -71,7 +71,7 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
 // --pre-jses are emitted after the Module integration code, so that they can
 // refer to Module (if they choose; they can also define Module)
-// include: C:\Users\kajya\AppData\Local\Temp\tmp85fukz3i.js
+// include: C:\Users\kajya\AppData\Local\Temp\tmp5kc_fojp.js
 
   if (!Module['expectedDataFileDownloads']) Module['expectedDataFileDownloads'] = 0;
   Module['expectedDataFileDownloads']++;
@@ -203,21 +203,21 @@ var ENVIRONMENT_IS_SHELL = !ENVIRONMENT_IS_WEB && !ENVIRONMENT_IS_NODE && !ENVIR
 
   })();
 
-// end include: C:\Users\kajya\AppData\Local\Temp\tmp85fukz3i.js
-// include: C:\Users\kajya\AppData\Local\Temp\tmpimm_58e4.js
+// end include: C:\Users\kajya\AppData\Local\Temp\tmp5kc_fojp.js
+// include: C:\Users\kajya\AppData\Local\Temp\tmpimzhu12n.js
 
     // All the pre-js content up to here must remain later on, we need to run
     // it.
     if ((typeof ENVIRONMENT_IS_WASM_WORKER != 'undefined' && ENVIRONMENT_IS_WASM_WORKER) || (typeof ENVIRONMENT_IS_PTHREAD != 'undefined' && ENVIRONMENT_IS_PTHREAD) || (typeof ENVIRONMENT_IS_AUDIO_WORKLET != 'undefined' && ENVIRONMENT_IS_AUDIO_WORKLET)) Module['preRun'] = [];
     var necessaryPreJSTasks = Module['preRun'].slice();
-  // end include: C:\Users\kajya\AppData\Local\Temp\tmpimm_58e4.js
-// include: C:\Users\kajya\AppData\Local\Temp\tmpfggqmmbk.js
+  // end include: C:\Users\kajya\AppData\Local\Temp\tmpimzhu12n.js
+// include: C:\Users\kajya\AppData\Local\Temp\tmpyl4fj7ml.js
 
     if (!Module['preRun']) throw 'Module.preRun should exist because file support used it; did a pre-js delete it?';
     necessaryPreJSTasks.forEach((task) => {
       if (Module['preRun'].indexOf(task) < 0) throw 'All preRun tasks that exist before user pre-js code should remain after; did you replace Module or modify Module.preRun?';
     });
-  // end include: C:\Users\kajya\AppData\Local\Temp\tmpfggqmmbk.js
+  // end include: C:\Users\kajya\AppData\Local\Temp\tmpyl4fj7ml.js
 
 
 var arguments_ = [];
@@ -9532,6 +9532,8 @@ var _GetAuxLevelUniqueCount = Module['_GetAuxLevelUniqueCount'] = makeInvalidEar
 var _GetAuxLevelAnonymitySum = Module['_GetAuxLevelAnonymitySum'] = makeInvalidEarlyAccess('_GetAuxLevelAnonymitySum');
 var _TestSelectEntity = Module['_TestSelectEntity'] = makeInvalidEarlyAccess('_TestSelectEntity');
 var _TestSelectHistoryNode = Module['_TestSelectHistoryNode'] = makeInvalidEarlyAccess('_TestSelectHistoryNode');
+var _IsComputeJobBusy = Module['_IsComputeJobBusy'] = makeInvalidEarlyAccess('_IsComputeJobBusy');
+var _GetComputeJobElapsedMs = Module['_GetComputeJobElapsedMs'] = makeInvalidEarlyAccess('_GetComputeJobElapsedMs');
 var _TestInsertRound = Module['_TestInsertRound'] = makeInvalidEarlyAccess('_TestInsertRound');
 var _TestDeleteRound = Module['_TestDeleteRound'] = makeInvalidEarlyAccess('_TestDeleteRound');
 var _TreeZoomAt = Module['_TreeZoomAt'] = makeInvalidEarlyAccess('_TreeZoomAt');
@@ -9615,6 +9617,8 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['GetAuxLevelAnonymitySum'] != 'undefined', 'missing Wasm export: GetAuxLevelAnonymitySum');
   assert(typeof wasmExports['TestSelectEntity'] != 'undefined', 'missing Wasm export: TestSelectEntity');
   assert(typeof wasmExports['TestSelectHistoryNode'] != 'undefined', 'missing Wasm export: TestSelectHistoryNode');
+  assert(typeof wasmExports['IsComputeJobBusy'] != 'undefined', 'missing Wasm export: IsComputeJobBusy');
+  assert(typeof wasmExports['GetComputeJobElapsedMs'] != 'undefined', 'missing Wasm export: GetComputeJobElapsedMs');
   assert(typeof wasmExports['TestInsertRound'] != 'undefined', 'missing Wasm export: TestInsertRound');
   assert(typeof wasmExports['TestDeleteRound'] != 'undefined', 'missing Wasm export: TestDeleteRound');
   assert(typeof wasmExports['TreeZoomAt'] != 'undefined', 'missing Wasm export: TreeZoomAt');
@@ -9694,6 +9698,8 @@ function assignWasmExports(wasmExports) {
   _GetAuxLevelAnonymitySum = Module['_GetAuxLevelAnonymitySum'] = createExportWrapper('GetAuxLevelAnonymitySum', 1);
   _TestSelectEntity = Module['_TestSelectEntity'] = createExportWrapper('TestSelectEntity', 1);
   _TestSelectHistoryNode = Module['_TestSelectHistoryNode'] = createExportWrapper('TestSelectHistoryNode', 1);
+  _IsComputeJobBusy = Module['_IsComputeJobBusy'] = createExportWrapper('IsComputeJobBusy', 0);
+  _GetComputeJobElapsedMs = Module['_GetComputeJobElapsedMs'] = createExportWrapper('GetComputeJobElapsedMs', 0);
   _TestInsertRound = Module['_TestInsertRound'] = createExportWrapper('TestInsertRound', 0);
   _TestDeleteRound = Module['_TestDeleteRound'] = createExportWrapper('TestDeleteRound', 0);
   _TreeZoomAt = Module['_TreeZoomAt'] = createExportWrapper('TreeZoomAt', 3);
