@@ -104,6 +104,14 @@ static void RunRecompute(bool useFastPath,void(*fastPathFn)(void),Entity *entity
     }
 }
 
+static void ReplayFromCurrentRound(void){
+    ExecuteNetworkFromRound(currentRound);
+}
+
+static void ReplayFromFirstRound(void){
+    ExecuteNetworkFromRound(0);
+}
+
 static void IncrementCurrentRound(void){
     if(currentRound<network->rounds->tot-1){
         currentRound++;
@@ -192,7 +200,7 @@ static void KeyPressed(SDL_Keycode key){
                 Entity *en=FirstEntityCorrespondingToSelectedNode();
                 DeleteInteractions(currentRound);
                 DisplayMessage("Delete all links in current round");
-                RunRecompute(currentRound==network->rounds->tot-1,ReExecuteLastRound,en);
+                RunRecompute(true,currentRound==network->rounds->tot-1?ReExecuteLastRound:ReplayFromCurrentRound,en);
             }
             break;
         case SDLK_DELETE:
@@ -228,7 +236,7 @@ static void KeyPressed(SDL_Keycode key){
                 InsertRound(++currentRound,true);
                 if(selectedNodeI!=-1)selectedNodeI++;
                 DisplayMessage("Insert new round");
-                RunRecompute(currentRound==network->rounds->tot-1,AppendLastRound,e);
+                RunRecompute(true,currentRound==network->rounds->tot-1?AppendLastRound:ReplayFromCurrentRound,e);
             }
             break;
         case SDLK_MINUS:
@@ -242,7 +250,7 @@ static void KeyPressed(SDL_Keycode key){
                     if(selectedNodeI!=-1)selectedNodeI--;
                 }
                 DisplayMessage("Delete current round");
-                RunRecompute(wasLastRound,RollBackLastRound,e);
+                RunRecompute(true,wasLastRound?RollBackLastRound:ReplayFromCurrentRound,e);
             }
             break;
         case SDLK_LCTRL:
@@ -662,7 +670,9 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
                     }
                     if(mult>0)DisplayMessage("Create new link");
                     else DisplayMessage("Delete link");
-                    RunRecompute(!allRounds && currentRound==network->rounds->tot-1,ReExecuteLastRound,NULL);
+                    RunRecompute(true,
+                        !allRounds && currentRound==network->rounds->tot-1?ReExecuteLastRound:
+                        (allRounds?ReplayFromFirstRound:ReplayFromCurrentRound),NULL);
                 }
             }
         }

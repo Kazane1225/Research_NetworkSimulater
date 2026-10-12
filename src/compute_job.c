@@ -8,17 +8,12 @@
 
 typedef enum{
     CJ_IDLE,
-    CJ_ROUNDS, // replaying rounds [nextRound, network->rounds->tot)
-    CJ_MERGE   // merging entities [nextEntity, network->entities->tot) into newFinalHistory
+    CJ_ROUNDS
 }ComputeJobPhase;
 
 static ComputeJobPhase phase=CJ_IDLE;
-static int nextRound=0;
-static int nextEntity=0;
-static HistoryTree *newFinalHistory=NULL;
-static HistoryTree **newFinalLeaf=NULL;
 static double jobStartMs=0.0;
-static double accumulatedComputeMs=0.0; // actual busy time spent on this job, excluding idle time between frames
+static double accumulatedComputeMs=0.0;
 
 static ComputeJobCallback pendingOnComplete=NULL;
 static void *pendingOnCompleteData=NULL;
@@ -35,19 +30,11 @@ static double PerfNowMs(void){
 }
 
 static void DiscardActiveJob(void){
-    if(phase==CJ_MERGE){
-        if(newFinalHistory)FreeHistoryTree(newFinalHistory);
-        if(newFinalLeaf)free(newFinalLeaf);
-    }
-    newFinalHistory=NULL;
-    newFinalLeaf=NULL;
     phase=CJ_IDLE;
 }
 
 void ComputeJob_Init(void){
     phase=CJ_IDLE;
-    newFinalHistory=NULL;
-    newFinalLeaf=NULL;
     pendingOnComplete=NULL;
     pendingOnCompleteData=NULL;
     pendingRunCounting=false;
@@ -63,7 +50,6 @@ double ComputeJob_ElapsedMs(void){
 }
 
 #ifdef __EMSCRIPTEN__
-// Polled by the page hourglass (website/js/ui.js). The canvas used to draw "Computing..." itself.
 EMSCRIPTEN_KEEPALIVE int IsComputeJobBusy(void){
     return ComputeJob_IsActive()?1:0;
 }
@@ -80,33 +66,9 @@ void ComputeJob_CancelActive(void){
     pendingRunCounting=false;
 }
 
-static void StartRoundsPhase(void){
-    ExecuteNetworkResetEntities();
-    nextRound=0;
-    phase=CJ_ROUNDS;
-}
-
-static void StartMergePhase(void){
-    int n=network->entities->tot;
-    newFinalHistory=NewHistoryTree();
-    newFinalLeaf=malloc((size_t)(n>0?n:1)*sizeof(HistoryTree*));
-    nextEntity=0;
-    phase=CJ_MERGE;
-}
-
-// Commits the freshly computed finalHistory/finalLeaf/aux all at once, so nothing ever
-// observes a state where only some entities' finalLeaf point into the new tree.
-static void CommitAndFinish(void){
-    int n=network->entities->tot;
-    if(finalHistory)FreeHistoryTree(finalHistory);
-    finalHistory=newFinalHistory;
-    for(int i=0;i<n;i++)GetEntity(i)->finalLeaf=newFinalLeaf[i];
-    free(newFinalLeaf);
-    newFinalHistory=NULL;
-    newFinalLeaf=NULL;
+static void FinishJob(void){
+    ExecuteNetworkReplayFinish();
     phase=CJ_IDLE;
-
-    ComputeAuxData(finalHistory);
     RecordRebuildPerf(accumulatedComputeMs);
     accumulatedComputeMs=0.0;
 
@@ -129,7 +91,8 @@ void ComputeJob_RequestRecompute(ComputeJobCallback onComplete,void *userdata,bo
     pendingRunCounting=runCountingAlgorithm;
     jobStartMs=PerfNowMs();
     accumulatedComputeMs=0.0;
-    StartRoundsPhase();
+    ExecuteNetworkReplayBegin(-1);
+    phase=CJ_ROUNDS;
     win1->invalid=true;
 }
 
@@ -138,30 +101,11 @@ void ComputeJob_Step(void){
     double stepStart=PerfNowMs();
     double budgetEnd=stepStart+COMPUTE_JOB_FRAME_BUDGET_MS;
     for(;;){
-        if(phase==CJ_ROUNDS){
-            if(nextRound>=network->rounds->tot){
-                StartMergePhase();
-            }
-            else{
-                ExecuteNetworkRunRound(nextRound);
-                nextRound++;
-            }
+        if(ExecuteNetworkReplayStep()){
+            accumulatedComputeMs+=PerfNowMs()-stepStart;
+            FinishJob();
+            return;
         }
-        else if(phase==CJ_MERGE){
-            int n=network->entities->tot;
-            if(nextEntity>=n){
-                accumulatedComputeMs+=PerfNowMs()-stepStart;
-                CommitAndFinish();
-                return;
-            }
-            else{
-                Entity *e=GetEntity(nextEntity);
-                newFinalLeaf[nextEntity]=ExecuteNetworkMergeEntity(newFinalHistory,e);
-                nextEntity++;
-            }
-        }
-        else break;
-        if(phase==CJ_IDLE)break;
         if(PerfNowMs()>=budgetEnd)break;
     }
     accumulatedComputeMs+=PerfNowMs()-stepStart;

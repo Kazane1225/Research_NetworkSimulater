@@ -9,12 +9,9 @@
 // whole job to completion inside a single ComputeJob_Step() call (see compute_job.c),
 // which reproduces the exact synchronous behaviour the app had before this feature existed.
 //
-// Scope: only the full replay path (ExecuteNetwork's round-replay + entity-merge loops) is
-// chunked here. The snapshot-based incremental paths (ReExecuteLastRound/AppendLastRound/
-// RollBackLastRound) are already O(1)-per-edit-ish and stay fully synchronous; they are not
-// wrapped by this scheduler, but interactive call sites must still avoid invoking them while
-// a chunked job is active (see invariant 1 below), since they mutate shared state
-// (currentMutationRound, finalHistory, aux, entity->history/snap) that a paused job also owns.
+// Scope: only the full rebuild path (ExecuteNetworkReplayBegin(-1) plus per-round steps) is
+// chunked here. Tail edits and head/middle suffix replay stay synchronous. Interactive call
+// sites must still skip edits while a chunked job is active (see invariant 1 below).
 //
 // IMPORTANT invariants:
 //   1) Interactive edits (add/delete entity, add/delete round, add/delete interaction,

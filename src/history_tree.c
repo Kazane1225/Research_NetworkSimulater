@@ -109,7 +109,6 @@ Observation *NewObservation(HistoryTree *history,int multiplicity){
     Observation *o=malloc(sizeof(Observation));
     o->history=history;
     o->multiplicity=multiplicity;
-    o->finalLeafAtSend=NULL;
     return o;
 }
 
