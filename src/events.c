@@ -159,7 +159,7 @@ static void KeyPressed(SDL_Keycode key){
                 Entity *en=FirstEntityCorrespondingToSelectedNode();
                 DeleteInteractions(currentRound);
                 if(currentRound==network->rounds->tot-1)ReExecuteLastRound();
-                else ExecuteNetwork();
+                else ExecuteNetworkFromRound(currentRound);
                 if(en)SelectNodeFromEntity(en);
                 numSteps=-1;
                 CountingAlgorithm();
@@ -205,7 +205,7 @@ static void KeyPressed(SDL_Keycode key){
                     AppendLastRound();
                     if(e)SelectNodeFromEntity(e);
                 } else {
-                    ExecuteNetwork();
+                    ExecuteNetworkFromRound(currentRound);
                     if(e)SelectNodeFromEntity(e);
                 }
                 numSteps=-1;
@@ -225,7 +225,7 @@ static void KeyPressed(SDL_Keycode key){
                     RollBackLastRound();
                     if(e)SelectNodeFromEntity(e);
                 } else {
-                    ExecuteNetwork();
+                    ExecuteNetworkFromRound(currentRound);
                     if(e)SelectNodeFromEntity(e);
                 }
                 numSteps=-1;
@@ -654,7 +654,7 @@ static void MouseReleased(SDL_MouseButtonEvent *button){
                         if(bothWays && selectedEntity!=s)AddInteraction(currentRound,s,selectedEntity,mult);
                     }
                     if(!allRounds && currentRound==network->rounds->tot-1)ReExecuteLastRound();
-                    else ExecuteNetwork();
+                    else ExecuteNetworkFromRound(allRounds?0:currentRound);
                     numSteps=-1;
                     CountingAlgorithm();
                     win1->invalid=true;

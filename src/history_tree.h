@@ -1,7 +1,6 @@
 typedef struct{ // used for messages between entities and for red edges
     struct HistoryTree *history; // history observed
     int multiplicity; // number of times observed
-    struct HistoryTree *finalLeafAtSend; // sender's finalLeaf at send time; NULL for persistent red edges
 }Observation;
 
 typedef struct HistoryTree{

@@ -86,10 +86,6 @@ static Interaction *CopyInteraction(Interaction *interaction){
     return interaction2;
 }
 
-static void ExecuteInteraction(Interaction *interaction){
-    SendHistory(interaction->e1,interaction->e2,interaction->multiplicity);
-}
-
 void SortLeaders(void){ // put all leaders at the beginning of the list of entities
     int l=0;
     for(int i=0;i<network->entities->tot;i++){
@@ -129,53 +125,13 @@ void InitNetwork(int type,int n){
     win1->invalid=true;
 }
 
-/* ── incremental execution helpers ────────────────────────────────────────── */
+/* ── simulation ───────────────────────────────────────────────────────────── */
 
-/* Returns the node in copy_root's tree that corresponds to orig_current in orig_root's tree.
-   Works by recording the child-index path from orig_current back to orig_root, then following
-   it in copy_root.  The two trees must be structurally identical up to orig_current. */
-static HistoryTree *FindCurrentInCopy(HistoryTree *orig_root,HistoryTree *orig_current,HistoryTree *copy_root){
-    if(orig_current==orig_root)return copy_root;
-    int depth=0;
-    HistoryTree *n=orig_current;
-    while(n->parent){n=n->parent;depth++;}
-    int *path=malloc((size_t)depth*sizeof(int));
-    n=orig_current;
-    for(int i=depth-1;i>=0;i--){
-        HistoryTree *p=n->parent;
-        for(int j=0;j<p->children->tot;j++){
-            if(p->children->items[j]==n){path[i]=j;break;}
-        }
-        n=p;
-    }
-    n=copy_root;
-    for(int i=0;i<depth;i++)n=n->children->items[path[i]];
-    free(path);
-    return n;
-}
-
-static void ClearEntityMailbox(Entity *e){
-    for(int j=0;j<e->mailbox->tot;j++){
-        Observation *m=e->mailbox->items[j];
-        FreeHistoryTree(m->history);
-        free(m);
-    }
-    FreeVector(e->mailbox);
-    e->mailbox=NewVector(4);
-}
-
-static void FreeEntitySnap(Entity *e){
-    if(e->snap){
-        FreeHistoryTree(e->snap->history);
-        free(e->snap);
-        e->snap=NULL;
-    }
-}
-
-static void RebuildFinalHistory(void);
-static void TakeSnapshotsBeforeRound(void);
-static void InitFinalHistoryFromEntities(void);
-static void ExecuteRoundIncremental(int r);
+/* finalHistory is built one level per round without materialising entity views: an entity's
+   node at level r+1 is the child of its level-r node identified by its input, its outdegree in
+   round r and the multiset of level-r nodes it received messages from. Children are created in
+   entity order, so the tree depends only on the network (not on the edits that produced it),
+   and the leader's node, entity 0 after SortLeaders, is the first child at every level. */
 
 typedef struct{HistoryTree *target;int mult;}RedInfo;
 static int cmp_redinfo(const void *a,const void *b){
@@ -183,273 +139,233 @@ static int cmp_redinfo(const void *a,const void *b){
     uintptr_t pb=(uintptr_t)((const RedInfo *)b)->target;
     return (pa>pb)-(pa<pb);
 }
-static void ExtendFinalHistoryOneLevel(HistoryTree **prevFL,RedInfo **infos,int *counts){
+
+static void AssignEntityIndices(void){
+    for(int i=0;i<network->entities->tot;i++)GetEntity(i)->index=i;
+}
+
+/* infos must be sorted by target and free of duplicate targets, like a node's observations. */
+static HistoryTree *FindOrAddChild(HistoryTree *par,int input,int outdegree,const RedInfo *infos,int nc){
+    for(int j=0;j<par->children->tot;j++){
+        HistoryTree *z=par->children->items[j];
+        if(z->input!=input||z->outdegree!=outdegree||z->observations->tot!=nc)continue;
+        bool ok=true;
+        for(int k=0;k<nc&&ok;k++){
+            Observation *o=z->observations->items[k];
+            if(o->history!=infos[k].target||o->multiplicity!=infos[k].mult)ok=false;
+        }
+        if(ok)return z;
+    }
+    HistoryTree *node=AddHistoryTreeChild(par,input);
+    node->outdegree=outdegree;
+    for(int k=0;k<nc;k++)AddRedEdge(node,infos[k].target,infos[k].mult);
+    return node;
+}
+
+static void SimulateLevel0(HistoryTree *root,HistoryTree **leaves){
+    int outdegree=outAware?0:-1;
+    for(int i=0;i<network->entities->tot;i++)
+        leaves[i]=FindOrAddChild(root,GetEntity(i)->input,outdegree,NULL,0);
+}
+
+/* Advances leaves[i] (the node of entity i) by round r. Entity indices must be current. */
+static void SimulateRound(int r,HistoryTree **leaves){
     int n=network->entities->tot;
-    for(int i=0;i<n;i++){
-        Entity *e=GetEntity(i);
-        HistoryTree *par=prevFL[i];
-        int nc=counts[i];
-        HistoryTree *node=NULL;
-        for(int j=0;j<par->children->tot&&!node;j++){
-            HistoryTree *z=par->children->items[j];
-            if(z->input!=e->current->input||z->outdegree!=e->current->outdegree||z->observations->tot!=nc)continue;
-            bool ok=true;
-            for(int k=0;k<nc&&ok;k++){
-                Observation *o=z->observations->items[k];
-                if(o->history!=infos[i][k].target||o->multiplicity!=infos[i][k].mult)ok=false;
-            }
-            if(ok)node=z;
-        }
-        if(!node){
-            node=AddHistoryTreeChild(par,e->current->input);
-            node->outdegree=e->current->outdegree;
-            for(int k=0;k<nc;k++)
-                AddRedEdge(node,infos[i][k].target,infos[i][k].mult);
-        }
-        e->finalLeaf=node;
+    Vector *v=network->rounds->items[r];
+    int *start=calloc((size_t)n+1,sizeof(int));
+    int *fill=calloc((size_t)n+1,sizeof(int));
+    int *outdegree=malloc(((size_t)n+1)*sizeof(int));
+    RedInfo *infos=malloc((size_t)(v->tot>0?v->tot:1)*sizeof(RedInfo));
+    for(int i=0;i<n;i++)outdegree[i]=outAware?0:-1;
+    for(int k=0;k<v->tot;k++){
+        Interaction *interaction=v->items[k];
+        start[interaction->e2->index+1]++;
     }
-}
-
-static void InitFinalHistoryFromEntities(void){
-    if(finalHistory)FreeHistoryTree(finalHistory);
-    finalHistory=NewHistoryTree();
-    double t0=PerfNowMs();
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        e->finalLeaf=MergeHistoryTrees(finalHistory,e->history,NULL);
+    for(int i=0;i<n;i++)start[i+1]+=start[i];
+    for(int k=0;k<v->tot;k++){
+        Interaction *interaction=v->items[k];
+        int s=interaction->e1->index,d=interaction->e2->index;
+        infos[start[d]+fill[d]++]=(RedInfo){leaves[s],interaction->multiplicity};
+        if(outAware)outdegree[s]+=interaction->multiplicity;
     }
-    ComputeAuxData(finalHistory);
-    double elapsed=PerfNowMs()-t0;
-    lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
-}
-
-static void CollectMailboxRedInfo(int n,RedInfo ***infos,int **counts){
-    *infos=malloc((size_t)n*sizeof(RedInfo*));
-    *counts=malloc((size_t)n*sizeof(int));
     for(int i=0;i<n;i++){
-        Entity *e=GetEntity(i);
-        int m=e->mailbox->tot;
-        (*infos)[i]=malloc((size_t)(m>0?m:1)*sizeof(RedInfo));
-        for(int j=0;j<m;j++){
-            Observation *obs=e->mailbox->items[j];
-            (*infos)[i][j].target=obs->finalLeafAtSend;
-            (*infos)[i][j].mult=obs->multiplicity;
-        }
-        qsort((*infos)[i],(size_t)m,sizeof(RedInfo),cmp_redinfo);
+        RedInfo *seg=infos+start[i];
+        int m=start[i+1]-start[i];
+        qsort(seg,(size_t)m,sizeof(RedInfo),cmp_redinfo);
         int u=0;
         for(int j=0;j<m;j++){
-            if(u>0&&(*infos)[i][u-1].target==(*infos)[i][j].target)
-                (*infos)[i][u-1].mult+=(*infos)[i][j].mult;
-            else (*infos)[i][u++]=(*infos)[i][j];
+            if(u>0&&seg[u-1].target==seg[j].target)seg[u-1].mult+=seg[j].mult;
+            else seg[u++]=seg[j];
         }
-        (*counts)[i]=u;
+        leaves[i]=FindOrAddChild(leaves[i],GetEntity(i)->input,outdegree[i],seg,u);
     }
-}
-
-static void FreeMailboxRedInfo(RedInfo **infos,int *counts,int n){
-    if(!infos)return;
-    for(int i=0;i<n;i++)free(infos[i]);
     free(infos);
-    free(counts);
+    free(outdegree);
+    free(fill);
+    free(start);
 }
 
-static void ExecuteRoundIncremental(int r){
+static HistoryTree **simLeaves=NULL;
+static int simN=0;
+static int simNext=0;
+static int simEnd=0;
+
+static void FreeSimState(void){
+    free(simLeaves);
+    simLeaves=NULL;
+    simN=0;
+    simNext=0;
+    simEnd=0;
+}
+
+static void CommitSimLeaves(void){
+    for(int i=0;i<simN;i++)GetEntity(i)->finalLeaf=simLeaves[i];
+}
+
+/* Extends finalHistory and aux by round r, which must be the round right after the deepest level. */
+static void ExtendFinalHistoryByRound(int r){
     int n=network->entities->tot;
-    int R=network->rounds->tot;
-    if(r==R-1)TakeSnapshotsBeforeRound();
-    SetHistoryTreeMutationRound(r+1);
-    HistoryTree **prevFL=malloc((size_t)n*sizeof(HistoryTree*));
-    for(int i=0;i<n;i++)prevFL[i]=GetEntity(i)->finalLeaf;
-    Vector *v=network->rounds->items[r];
-    for(int i=0;i<v->tot;i++)ExecuteInteraction(v->items[i]);
-    RedInfo **infos;
-    int *counts;
-    CollectMailboxRedInfo(n,&infos,&counts);
-    for(int i=0;i<n;i++)EndRound(GetEntity(i));
-    ExtendFinalHistoryOneLevel(prevFL,infos,counts);
+    HistoryTree **leaves=malloc(((size_t)n+1)*sizeof(HistoryTree*));
+    AssignEntityIndices();
+    for(int i=0;i<n;i++)leaves[i]=GetEntity(i)->finalLeaf;
+    SimulateRound(r,leaves);
+    for(int i=0;i<n;i++)GetEntity(i)->finalLeaf=leaves[i];
+    free(leaves);
     AppendAuxDataOneLevel();
-    FreeMailboxRedInfo(infos,counts,n);
-    free(prevFL);
 }
 
-static HistoryTree *FindMatchingFinalLeaf(HistoryTree *entityHist){
-    if(!finalHistory||!entityHist)return NULL;
-    HistoryTree *best=NULL;
-    Vector *stack=NewVector(16);
-    AddVector(stack,finalHistory);
-    while(stack->tot){
-        HistoryTree *node=DeleteVector(stack,stack->tot-1);
-        if(HistoryTreeEquals(entityHist,node)){
-            if(!best||node->level>best->level)best=node;
-        }
-        for(int i=0;i<node->children->tot;i++)
-            AddVector(stack,node->children->items[i]);
-    }
-    FreeVector(stack);
-    return best;
-}
-
-static void ReassignEntityFinalLeaves(void){
-    int n=network->entities->tot;
-    for(int i=0;i<n;i++)ComputeHashBottomUp(GetEntity(i)->history);
-    for(int i=0;i<n;i++){
-        Entity *e=GetEntity(i);
-        HistoryTree *leaf=NULL;
-        unsigned long long h=e->history->hash;
-        for(int j=0;j<i;j++){
-            if(GetEntity(j)->history->hash==h&&HistoryTreeEquals(GetEntity(j)->history,e->history)){
-                leaf=GetEntity(j)->finalLeaf;break;
-            }
-        }
-        if(!leaf)leaf=FindMatchingFinalLeaf(e->history);
-        e->finalLeaf=leaf;
-    }
-}
-
-static void TrimSimulationViewsToPrefix(int prefixRounds){
-    if(!finalHistory)return;
-    TrimHistoryTreeToRound(finalHistory,prefixRounds);
-    int target=prefixRounds+1;
-    while(aux&&aux->tot>target)TrimAuxDataOneLevel();
-}
-
-static bool TryRestorePrefixViews(int prefixRounds){
-    if(!finalHistory||!aux||prefixRounds<0)return false;
-    TrimSimulationViewsToPrefix(prefixRounds);
-    ReassignEntityFinalLeaves();
+/* aux has one level for the root plus one per finalHistory level (rounds+1 of them). */
+static bool FinalHistoryHasLevels(int auxLevels){
+    if(!finalHistory||!aux||aux->tot!=auxLevels)return false;
     for(int i=0;i<network->entities->tot;i++)
         if(!GetEntity(i)->finalLeaf)return false;
     return true;
 }
 
-static void RebuildFinalHistory(void){
-    double t0=PerfNowMs();
-    if(finalHistory)FreeHistoryTree(finalHistory);
-    finalHistory=NewHistoryTree();
+static bool CanTrimToLevel(int keepLevel){
+    int keepAux=keepLevel+2;
+    if(!finalHistory||!aux||aux->tot<keepAux)return false;
+    for(int i=0;i<network->entities->tot;i++){
+        HistoryTree *h=GetEntity(i)->finalLeaf;
+        if(!h)return false;
+        while(h&&h->level>keepLevel)h=h->parent;
+        if(!h||h->level!=keepLevel)return false;
+    }
+    return true;
+}
+
+/* Removes the deepest level of finalHistory and of aux; entities move back to their parents. */
+static void TrimFinalHistoryLastLevel(void){
     int n=network->entities->tot;
-    /* Compute Merkle hashes so identical trees can be detected in O(1). */
-    for(int i=0;i<n;i++) ComputeHashBottomUp(GetEntity(i)->history);
-    for(int i=0;i<n;i++){
-        Entity *e=GetEntity(i);
-        /* The Merkle hash (which excludes red edges) is a fast filter only, not a proof
-           of isomorphism.  Two trees with the same black-edge structure but different
-           reception histories can share a hash yet represent distinct equivalence classes.
-           We therefore always follow a hash match with a full structural isomorphism check
-           (HistoryTreeEquals) before reusing a finalLeaf. */
-        HistoryTree *leaf=NULL;
-        unsigned long long h=e->history->hash;
-        for(int j=0;j<i;j++){
-            if(GetEntity(j)->history->hash==h && HistoryTreeEquals(GetEntity(j)->history,e->history)){
-                leaf=GetEntity(j)->finalLeaf;break;
+    for(int i=0;i<n;i++)GetEntity(i)->finalLeaf=GetEntity(i)->finalLeaf->parent;
+    Vector *deepest=GetLevel(aux->tot-1);
+    int m=deepest->tot;
+    HistoryTree **nodes=malloc((size_t)(m>0?m:1)*sizeof(HistoryTree*));
+    for(int j=0;j<m;j++)nodes[j]=((AuxData*)deepest->items[j])->h;
+    TrimAuxDataOneLevel();
+    for(int j=0;j<m;j++){
+        HistoryTree *node=nodes[j];
+        HistoryTree *par=node->parent;
+        if(par){
+            for(int i=0;i<par->children->tot;i++){
+                if(par->children->items[i]==node){
+                    DeinsertVector(par->children,i);
+                    break;
+                }
             }
         }
-        e->finalLeaf=leaf?leaf:MergeHistoryTrees(finalHistory,e->history,NULL);
+        FreeHistoryTree(node);
     }
+    free(nodes);
+}
+
+static void TrimFinalHistoryToLevel(int keepLevel){
+    int keepAux=keepLevel+2;
+    while(aux&&aux->tot>keepAux)TrimFinalHistoryLastLevel();
+}
+
+/* Re-execute only the last round after its interactions changed. */
+void ReExecuteLastRound(void){
+    int R=network->rounds->tot;
+    if(R==0||!FinalHistoryHasLevels(R+2)){ExecuteNetwork();return;}
+    TrimFinalHistoryLastLevel();
+    ExtendFinalHistoryByRound(R-1);
+}
+
+/* Drop the deepest level after DeleteRound(last) removed the last round. */
+void RollBackLastRound(void){
+    if(!FinalHistoryHasLevels(network->rounds->tot+3)){ExecuteNetwork();return;}
+    TrimFinalHistoryLastLevel();
+}
+
+/* Add one level for the round InsertRound() just appended at the end. */
+void AppendLastRound(void){
+    double totalStart=PerfNowMs();
+    int R=network->rounds->tot;
+    if(R==0||!FinalHistoryHasLevels(R+1))ExecuteNetwork();
+    else ExtendFinalHistoryByRound(R-1);
+    double elapsed=PerfNowMs()-totalStart;
+    RecordAppendPerf(0.0,elapsed,0.0,0.0,elapsed);
+}
+
+/* firstRound<0 rebuilds from an empty tree. firstRound>=0 keeps levels up to firstRound
+   (level 0 is the input layer; round r produces level r+1) and replays [firstRound, R). */
+void ExecuteNetworkReplayBegin(int firstRound){
+    FreeSimState();
+    int n=network->entities->tot;
+    simN=n;
+    simLeaves=malloc(((size_t)n+1)*sizeof(HistoryTree*));
+    AssignEntityIndices();
+    if(firstRound>=0&&CanTrimToLevel(firstRound)){
+        TrimFinalHistoryToLevel(firstRound);
+        for(int i=0;i<n;i++)simLeaves[i]=GetEntity(i)->finalLeaf;
+        simNext=firstRound;
+        simEnd=network->rounds->tot;
+        return;
+    }
+    if(finalHistory)FreeHistoryTree(finalHistory);
+    finalHistory=NewHistoryTree();
+    SimulateLevel0(finalHistory,simLeaves);
+    simNext=0;
+    simEnd=network->rounds->tot;
+}
+
+int ExecuteNetworkReplayStep(void){
+    if(simNext>=simEnd)return 1;
+    SimulateRound(simNext,simLeaves);
+    simNext++;
+    return simNext>=simEnd;
+}
+
+void ExecuteNetworkReplayFinish(void){
+    CommitSimLeaves();
+    FreeSimState();
     ComputeAuxData(finalHistory);
+}
+
+static void RunReplay(int firstRound){
+    double t0=PerfNowMs();
+    ExecuteNetworkReplayBegin(firstRound);
+    while(!ExecuteNetworkReplayStep());
+    ExecuteNetworkReplayFinish();
     double elapsed=PerfNowMs()-t0;
     lastRebuildMs=elapsed; sumRebuildMs+=elapsed; rebuildSamples++;
 }
 
-/* Snapshot all entities' current states as "before the last round". */
-static void TakeSnapshotsBeforeRound(void){
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        FreeEntitySnap(e);
-        e->snap=malloc(sizeof(EntitySnapshot));
-        e->snap->history=CopyHistoryTree(e->history,NULL);
-        e->snap->current=FindCurrentInCopy(e->history,e->current,e->snap->history);
-        e->snap->outdegree=e->outdegree;
-    }
-}
-
-/* Restore all entities from their snapshots.  snap fields are consumed and set NULL. */
-static void RestoreFromSnapshots(void){
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        FreeHistoryTree(e->history);
-        ClearEntityMailbox(e);
-        /* Take ownership of snap tree directly (no copy needed for RollBack) */
-        e->history=e->snap->history;
-        e->current=e->snap->current;
-        e->outdegree=e->snap->outdegree;
-        free(e->snap);e->snap=NULL;
-    }
-}
-
-/* Restore all entities from their snapshots, keeping snap valid for future re-executions. */
-static void RestoreFromSnapshotsCopy(void){
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        FreeHistoryTree(e->history);
-        ClearEntityMailbox(e);
-        HistoryTree *h=CopyHistoryTree(e->snap->history,NULL);
-        e->current=FindCurrentInCopy(e->snap->history,e->snap->current,h);
-        e->history=h;
-        e->outdegree=e->snap->outdegree;
-    }
-}
-
-static bool SnapshotsValid(void){
-    if(!network || network->rounds->tot==0)return false;
-    for(int i=0;i<network->entities->tot;i++)
-        if(!GetEntity(i)->snap)return false;
-    return true;
-}
-
-/* Re-execute only the last round using saved snapshots.
-   Restores pre-last-round state (keeping snap valid), replays last round, rebuilds finalHistory.
-   Falls back to full ExecuteNetwork() when snapshots are unavailable. */
-void ReExecuteLastRound(void){
-    if(!SnapshotsValid()){ExecuteNetwork();return;}
-    RestoreFromSnapshotsCopy();
-    ExecuteRoundIncremental(network->rounds->tot-1);
-}
-
-/* Roll back the last round: entity states revert to pre-last-round snapshots.
-   Called after DeleteRound(last) when the last round was removed. */
-void RollBackLastRound(void){
-    if(!SnapshotsValid()){ExecuteNetwork();return;}
-    RestoreFromSnapshots();
-    if(!TryRestorePrefixViews(network->rounds->tot))
-        RebuildFinalHistory();
-}
-
-/* Append the newly added last round on top of the current (already up-to-date) entity states.
-   Called after InsertRound() appended a round at the end. */
-void AppendLastRound(void){
-    double totalStart=PerfNowMs();
-    ExecuteRoundIncremental(network->rounds->tot-1);
-    double afterAux=PerfNowMs();
-    RecordAppendPerf(0.0,afterAux-totalStart,0.0,0.0,afterAux-totalStart);
+void ExecuteNetworkFromRound(int firstRound){
+    RunReplay(firstRound<0?0:firstRound);
 }
 
 void ExecuteNetwork(void){
-    SetHistoryTreeMutationRound(0);
-    for(int i=0;i<network->entities->tot;i++){
-        Entity *e=GetEntity(i);
-        if(e->history)FreeHistoryTree(e->history);
-        FreeEntitySnap(e);
-        e->outdegree=outAware?0:-1;
-        e->current=e->history=NewHistoryTree();
-        ExtendHistory(e);
-    }
-    int R=network->rounds->tot;
-    for(int r=0;r<R;r++){
-        if(r==R-1)TakeSnapshotsBeforeRound();
-        SetHistoryTreeMutationRound(r+1);
-        Vector *v=network->rounds->items[r];
-        for(int i=0;i<v->tot;i++)
-            ExecuteInteraction(v->items[i]);
-        for(int i=0;i<network->entities->tot;i++)
-            EndRound(GetEntity(i));
-    }
-    InitFinalHistoryFromEntities();
+    RunReplay(-1);
 }
 
 void DoneNetwork(void){
+    FreeSimState();
     FreeAuxData();
     if(finalHistory)FreeHistoryTree(finalHistory);
     finalHistory=NULL;
+    if(!network)return;
     for(int i=0;i<network->entities->tot;i++)
         FreeEntity(GetEntity(i));
     for(int r=network->rounds->tot-1;r>=0;r--)
@@ -1150,13 +1066,6 @@ EMSCRIPTEN_KEEPALIVE int GetEntityFinalLeafCell(int agent){
     if(!e||!e->finalLeaf||!e->finalLeaf->data)return -1;
     AuxData *d=e->finalLeaf->data;
     return d->i*100000+d->j;
-}
-
-EMSCRIPTEN_KEEPALIVE unsigned GetEntityVistaHash(int agent){
-    if(!network || agent<0 || agent>=network->entities->tot)return 0;
-    Entity *e=GetEntity(agent);
-    if(!e||!e->history)return 0;
-    return HistoryTreeStructFingerprint(e->history);
 }
 
 EMSCRIPTEN_KEEPALIVE int GetAuxLevelUniqueCount(int level){

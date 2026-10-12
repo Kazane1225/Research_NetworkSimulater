@@ -23,9 +23,13 @@ int GetEntityIndex(Entity *e);
 void SortLeaders(void); // put all leaders at the beginning of the list of entities
 void InitNetwork(int type,int n);
 void ExecuteNetwork(void);
-void ReExecuteLastRound(void); // re-execute only the last round using saved snapshots
-void RollBackLastRound(void);  // restore to pre-last-round state after last round was deleted
-void AppendLastRound(void);    // apply newly appended last round on top of current entity states
+void ExecuteNetworkFromRound(int firstRound); // keep prefix levels; replay rounds [firstRound, R)
+void ReExecuteLastRound(void); // rebuild only the deepest level after the last round changed
+void RollBackLastRound(void);  // drop the deepest level after the last round was deleted
+void AppendLastRound(void);    // add one level for a round appended at the end
+void ExecuteNetworkReplayBegin(int firstRound); // firstRound<0 rebuilds from the root
+int ExecuteNetworkReplayStep(void); // one round; 1 when rounds are done
+void ExecuteNetworkReplayFinish(void); // commit leaves and rebuild aux
 void DoneNetwork(void);
 void InsertRound(int index,bool copy);
 void DeleteInteractions(int index);
